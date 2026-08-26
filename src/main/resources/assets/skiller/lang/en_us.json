@@ -1,0 +1,35 @@
+{
+  "_comment": "Skiller Mod Translation File",
+  "_comment2": "English (United States) translations",
+
+  "message.skiller.enabled": "Skill system enabled",
+  "message.skiller.disabled": "Skill system disabled",
+
+  "tooltip.skiller.skill_tips": "Press Alt to view skills",
+  "tooltip.skiller.skill": "Skills",
+
+  "_comment3": "Key Bindings",
+  "key.categories.skiller": "Skiller",
+  "key.skiller.skill_0": "Skill Slot 1",
+  "key.skiller.skill_1": "Skill Slot 2",
+  "key.skiller.skill_2": "Skill Slot 3",
+  "key.skiller.enable_skill": "Enable Skill System",
+  "key.skiller.disable_skill": "Disable Skill System",
+
+  "_comment4": "Dynamic skill translations (examples)",
+  "_comment5": "Format: skill.{mod_id}.{skill_name}",
+  "skill.skiller.example": "Example Skill",
+  "skill.skiller.fireball": "Fireball",
+  "skill.skiller.teleport": "Teleport",
+  "skill.skiller.heal": "Heal",
+  "skill.skiller.lightning": "Lightning Strike",
+  "skill.skiller.dash": "Dash",
+  "skill.skiller.shield": "Shield",
+
+  "_comment6": "Dynamic skill type translations (examples)",
+  "_comment7": "Format: skillType.{mod_id}.{type_name}",
+  "skillType.skiller.active": "Active",
+  "skillType.skiller.passive": "Passive",
+  "skillType.skiller.toggle": "Toggle",
+  "skillType.skiller.channeling": "Channeling"
+}

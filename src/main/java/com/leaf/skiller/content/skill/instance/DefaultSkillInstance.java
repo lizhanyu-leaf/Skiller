@@ -6,6 +6,7 @@ import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -55,11 +56,12 @@ public class DefaultSkillInstance<T extends SkillContext> extends NbtSkillInstan
      * @throws NullPointerException if skill, resource, or data is null
      *                               如果 skill、resource 或 data 为 null 则抛出异常
      * @see ItemSkill
+     * @see ItemSkillRegistration
      * @see SkillResource
      * @see CompoundTag
      * @since 1.0.0
      */
-    public DefaultSkillInstance(ItemSkill<T> skill, SkillResource resource, int level, CompoundTag data) {
+    public DefaultSkillInstance(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag data) {
         super(skill, resource, level, data);
     }
 

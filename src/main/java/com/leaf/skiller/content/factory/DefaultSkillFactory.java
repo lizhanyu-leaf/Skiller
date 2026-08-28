@@ -5,6 +5,7 @@ import com.leaf.skiller.content.skill.instance.DefaultSkillInstance;
 import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -93,7 +94,7 @@ public class DefaultSkillFactory<T extends SkillContext> extends NbtSkillInstanc
      * @since 1.0.0
      */
     @Override
-    protected DefaultSkillInstance<T> create(ItemSkill<T> skill, SkillResource resource, int level, CompoundTag nbt) {
+    protected DefaultSkillInstance<T> create(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag nbt) {
         return new DefaultSkillInstance<>(skill, resource, level, nbt);
     }
 
@@ -131,7 +132,7 @@ public class DefaultSkillFactory<T extends SkillContext> extends NbtSkillInstanc
      * @since 1.0.0
      */
     @Override
-    public DefaultSkillInstance<T> createDefault(ItemSkill<T> skill) {
+    public DefaultSkillInstance<T> createDefault(ItemSkillRegistration<T> skill) {
         return new DefaultSkillInstance<>(skill, AllSkillResources.EMPTY.resource(), 1, new CompoundTag());
     }
 }

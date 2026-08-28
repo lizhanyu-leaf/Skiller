@@ -3,6 +3,8 @@ package com.leaf.skiller.api.registry;
 import com.leaf.skiller.foundation.SkillInstanceFactory;
 import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
+import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
 import com.leaf.skiller.foundation.strategy.SkillStrategy;
 import org.jetbrains.annotations.ApiStatus.Internal;
 
@@ -70,10 +72,11 @@ public class SkillerBuiltInRegistries {
      * 该注册表保存玩家可以使用的所有基于物品的技能定义。
      *
      * @see ItemSkill
+     * @see ItemSkillRegistration
      * @see SkillerRegistries#SKILL
      * @since 1.0.0
      */
-    public static final Registry<ItemSkill<?>> SKILLS = simple(SkillerRegistries.SKILL);
+    public static final Registry<ItemSkillRegistration<?>> SKILLS = simple(SkillerRegistries.SKILL);
 
     /**
      * The built-in registry for skill strategies, containing all registered strategy implementations.
@@ -87,6 +90,8 @@ public class SkillerBuiltInRegistries {
      * @since 1.0.0
      */
     public static final Registry<SkillStrategy<?, ?>> STRATEGIES = simple(SkillerRegistries.STRATEGY);
+
+    public static final Registry<SkillContextFactory<?>> CONTEXT_FACTORIES = simple(SkillerRegistries.CONTEXT_FACTORY);
 
     /**
      * Creates a simple registry without intrusive holders or freeze callbacks.

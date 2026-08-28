@@ -99,7 +99,7 @@ public class ClientEvents {
      *
      * @param event The render level stage event containing rendering context information - 包含渲染上下文信息的渲染级别阶段事件
      * @see RenderLevelStageEvent
-     * @see StrategyRenderers#render(RenderLevelStageEvent, Minecraft, ClientLevel, PoseStack, Camera, MultiBufferSource)
+     * @see StrategyRenderers#render
      * @see SubscribeEvent
      * @since 1.0.0
      */

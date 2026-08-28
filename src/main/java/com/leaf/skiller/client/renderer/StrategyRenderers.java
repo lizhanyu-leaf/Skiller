@@ -277,7 +277,7 @@ public class StrategyRenderers {
                               PoseStack stack, Camera camera, MultiBufferSource buffer) {
         // Get the list of renderers for this stage and execute each one
         // 获取此阶段的渲染器列表并执行每个渲染器
-        STAGE_RENDERERS.get(event.getStage())
+        STAGE_RENDERERS.computeIfAbsent(event.getStage(), key -> new ArrayList<>())
                 .forEach(renderer -> renderer.render(mc, level, stack, camera, buffer));
     }
 

@@ -85,7 +85,7 @@ public class SkillBundle implements OwnedBySkills {
      *
      * @since 1.0.0
      */
-    private final Map<SkillType, List<ItemSkill<?>>> skills;
+    private final Map<SkillType, List<ItemSkillRegistration<?>>> skills;
 
     /**
      * Map of skill types to their corresponding skill instances.
@@ -169,7 +169,7 @@ public class SkillBundle implements OwnedBySkills {
      * @since 1.0.0
      */
     @Override
-    public Map<SkillType, List<ItemSkill<?>>> skills() {
+    public Map<SkillType, List<ItemSkillRegistration<?>>> skills() {
         return skills;
     }
 
@@ -335,13 +335,13 @@ public class SkillBundle implements OwnedBySkills {
      * @see ISkillInstance
      * @since 1.0.0
      */
-    private static Pair<Map<SkillType, List<ItemSkill<?>>>, Map<SkillType, List<ISkillInstance<?>>>>
+    private static Pair<Map<SkillType, List<ItemSkillRegistration<?>>>, Map<SkillType, List<ISkillInstance<?>>>>
             groupSkills(List<ISkillInstance<?>> skillData) {
-        Map<SkillType, List<ItemSkill<?>>> skillResult          = new HashMap<>();
+        Map<SkillType, List<ItemSkillRegistration<?>>> skillResult          = new HashMap<>();
         Map<SkillType, List<ISkillInstance<?>>> skillDataResult = new HashMap<>();
 
         for (ISkillInstance<?> data : skillData) {
-            ItemSkill<?> skill = data.skill();
+            ItemSkillRegistration<?> skill = data.skill();
             skillResult.computeIfAbsent(skill.getType(), k -> new ArrayList<>()).add(skill);
             skillDataResult.computeIfAbsent(skill.getType(), k -> new ArrayList<>()).add(data);
         }

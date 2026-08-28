@@ -4,6 +4,8 @@ import com.leaf.skiller.Skiller;
 import com.leaf.skiller.foundation.SkillInstanceFactory;
 import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
+import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
 import com.leaf.skiller.foundation.strategy.SkillStrategy;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceKey;
@@ -61,7 +63,7 @@ public class SkillerRegistries {
      * @see ItemSkill
      * @since 1.0.0
      */
-    public static final ResourceKey<Registry<ItemSkill<?>>> SKILL = key("skill");
+    public static final ResourceKey<Registry<ItemSkillRegistration<?>>> SKILL = key("skill");
 
     /**
      * Registry key for skill strategies, which define the behavior and logic of skill execution.
@@ -74,6 +76,8 @@ public class SkillerRegistries {
      * @since 1.0.0
      */
     public static final ResourceKey<Registry<SkillStrategy<?, ?>>> STRATEGY = key("skill_strategy");
+
+    public static final ResourceKey<Registry<SkillContextFactory<?>>> CONTEXT_FACTORY = key("skill_context_factory");
 
     /**
      * Creates a registry key with the specified path, using the Skiller mod namespace.

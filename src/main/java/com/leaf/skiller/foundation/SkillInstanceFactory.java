@@ -3,6 +3,7 @@ package com.leaf.skiller.foundation;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 
 /**
  * Factory interface for creating and serializing skill instances.
@@ -57,7 +58,7 @@ public interface SkillInstanceFactory<T extends SkillContext, I extends ISkillIn
      * @see ISkillInstance
      * @see ItemSkill
      */
-    I createDefault(ItemSkill<T> skill);
+    I createDefault(ItemSkillRegistration<T> skill);
 
     /**
      * Creates a skill instance from serialized SkillData.

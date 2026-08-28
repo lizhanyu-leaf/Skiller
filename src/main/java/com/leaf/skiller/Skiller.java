@@ -24,8 +24,7 @@ import org.apache.logging.log4j.Logger;
  * 模组标识符 "skiller" 在整个代码库中用于为所有模组资源、注册表和配置命名。
  * </p>
  *
- * @author Skiller Development Team
- * @author Skiller 开发团队
+ * @author Leaf
  * @version 1.0.0
  * @see ModContainer
  * @see IEventBus

@@ -7,6 +7,7 @@ import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 
@@ -107,8 +108,8 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      *   <li>从 NBT 解析资源类型并从注册表中检索</li>
      *   <li>Extracts the skill level from NBT
      *   <li>从 NBT 提取技能等级</li>
-     *   <li>Delegates to the abstract {@link #create(ItemSkill, SkillResource, int, CompoundTag)} method
-     *   <li>委托给抽象的 {@link #create(ItemSkill, SkillResource, int, CompoundTag)} 方法</li>
+     *   <li>Delegates to the abstract {@link #create(ItemSkillRegistration, SkillResource, int, CompoundTag)} method
+     *   <li>委托给抽象的 {@link #create(ItemSkillRegistration, SkillResource, int, CompoundTag)} 方法</li>
      * </ol>
      * <p>
      * If any required component cannot be found or is invalid, this method returns null.
@@ -132,7 +133,7 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
 
         // 1. 从注册表获取 skill
         // Retrieve skill from registry
-        ItemSkill<T> skill = (ItemSkill<T>) SkillerBuiltInRegistries.SKILLS.get(data.skillId());
+        var skill = SkillerBuiltInRegistries.SKILLS.get(data.skillId());
         if (skill == null) return null;
 
         // 2. 从 NBT 获取 resource
@@ -145,7 +146,7 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
         // Retrieve level from NBT
         int level = nbt.getInt(levelKey);
 
-        return create(skill, resource, level, nbt);
+        return create((ItemSkillRegistration<T>) skill, resource, level, nbt);
     }
 
     /**
@@ -226,5 +227,5 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      * @see CompoundTag
      * @since 1.0.0
      */
-    protected abstract I create(ItemSkill<T> skill, SkillResource resource, int level, CompoundTag nbt);
+    protected abstract I create(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag nbt);
 }

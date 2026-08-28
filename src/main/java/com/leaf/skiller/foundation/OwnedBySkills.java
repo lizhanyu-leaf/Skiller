@@ -2,6 +2,7 @@ package com.leaf.skiller.foundation;
 
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import com.leaf.skiller.foundation.skill.SkillType;
 
 import java.util.ArrayList;
@@ -54,9 +55,9 @@ public interface OwnedBySkills {
      *
      * @since 1.0.0
      * @see SkillType
-     * @see ItemSkill
+     * @see ItemSkillRegistration
      */
-    Map<SkillType, List<ItemSkill<?>>> skills();
+    Map<SkillType, List<ItemSkillRegistration<?>>> skills();
 
     /**
      * Returns all skills of the specified type.
@@ -80,7 +81,7 @@ public interface OwnedBySkills {
      * @see SkillType
      * @see ItemSkill
      */
-    default List<ItemSkill<?>> getSkills(SkillType type) {
+    default List<ItemSkillRegistration<?>> getSkills(SkillType type) {
         return skills().get(type);
     }
 
@@ -102,12 +103,12 @@ public interface OwnedBySkills {
      * @since 1.0.0
      * @see ItemSkill
      */
-    default List<ItemSkill<?>> getAllSkills() {
+    default List<ItemSkillRegistration<?>> getAllSkills() {
         if (skills().isEmpty()) {
             return Collections.emptyList();
         }
-        List<ItemSkill<?>> all = new ArrayList<>();
-        for (List<ItemSkill<?>> skillList : skills().values()) {
+        List<ItemSkillRegistration<?>> all = new ArrayList<>();
+        for (List<ItemSkillRegistration<?>> skillList : skills().values()) {
             all.addAll(skillList);
         }
         return Collections.unmodifiableList(all);
@@ -170,7 +171,7 @@ public interface OwnedBySkills {
      * @see ItemSkill
      * @see #hasSkill(SkillType)
      */
-    default boolean hasSkill(ItemSkill<?> skill) {
+    default boolean hasSkill(ItemSkillRegistration<?> skill) {
         return skills().containsKey(skill.getType()) && skills().get(skill.getType()).contains(skill);
     }
 
@@ -195,7 +196,7 @@ public interface OwnedBySkills {
      * @since 1.0.0
      * @see ItemSkill
      */
-    default OwnedBySkills addSkill(ItemSkill<?> skill) {
+    default OwnedBySkills addSkill(ItemSkillRegistration<?> skill) {
         if (!skills().containsKey(skill.getType())) {
             skills().put(skill.getType(), new ArrayList<>());
         }
@@ -256,7 +257,7 @@ public interface OwnedBySkills {
      * @see ItemSkill
      * @see #removeSkill(SkillType)
      */
-    default OwnedBySkills removeSkill(ItemSkill<?> skill) {
+    default OwnedBySkills removeSkill(ItemSkillRegistration<?> skill) {
         SkillType type = skill.getType();
         if (hasSkill(type)) {
             skills().get(type).remove(skill);
@@ -300,7 +301,7 @@ public interface OwnedBySkills {
      * @since 1.0.0
      * @see SkillType
      * @see SkillContext
-     * @see ItemSkill#release(SkillContext, ISkillInstance)
+     * @see ItemSkill#release
      */
     <T extends SkillContext> boolean releaseSkills(SkillType type, T context);
 }

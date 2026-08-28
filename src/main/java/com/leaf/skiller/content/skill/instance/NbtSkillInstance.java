@@ -4,6 +4,7 @@ import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -44,7 +45,7 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
      * 此字段存储对 ItemSkill 的引用，该引用定义了此技能实例的行为、属性和元数据。
      * </p>
      */
-    private final ItemSkill<T> skill;
+    private final ItemSkillRegistration<T> skill;
 
     /**
      * The resource type associated with this skill instance.
@@ -108,7 +109,7 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
      * @see CompoundTag
      * @since 1.0.0
      */
-    protected NbtSkillInstance(ItemSkill<T> skill, SkillResource resource, int level, CompoundTag data) {
+    protected NbtSkillInstance(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag data) {
         this.skill = skill;
         this.resource = resource;
         this.level = level;
@@ -132,7 +133,7 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
      * @since 1.0.0
      */
     @Override
-    public ItemSkill<T> skill() {
+    public ItemSkillRegistration<T> skill() {
         return skill;
     }
 

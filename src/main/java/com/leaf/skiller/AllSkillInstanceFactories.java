@@ -7,6 +7,7 @@ import com.leaf.skiller.foundation.SkillInstanceFactory;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
+import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceLocation;
 
@@ -217,11 +218,11 @@ public enum AllSkillInstanceFactories {
      * @since 1.0.0
      */
     private static <T extends SkillContext, I extends ISkillInstance<T>> SkillInstanceFactory<T, I> of(
-            Function<ItemSkill<T>, I> createDefault, Function<SkillData, I> createData, Function<I, SkillData> toData
+            Function<ItemSkillRegistration<T>, I> createDefault, Function<SkillData, I> createData, Function<I, SkillData> toData
     ) {
         return new SkillInstanceFactory<>() {
             @Override
-            public I createDefault(ItemSkill<T> skill) {
+            public I createDefault(ItemSkillRegistration<T> skill) {
                 return createDefault.apply(skill);
             }
 

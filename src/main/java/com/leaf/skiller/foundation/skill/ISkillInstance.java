@@ -41,7 +41,7 @@ public abstract class ISkillInstance<T extends SkillContext> {
      *
      * @since 1.0.0
      */
-    public abstract ItemSkill<T> skill();
+    public abstract ItemSkillRegistration<T> skill();
 
     /**
      * Returns the NBT data containing this instance's serialized state.
@@ -125,7 +125,7 @@ public abstract class ISkillInstance<T extends SkillContext> {
      * @see ItemSkill#consumeResource(SkillContext, Consumable, ISkillInstance)
      */
     public void consumeResource(T context, Consumable consumable) {
-        skill().consumeResource(context, consumable, this);
+        skill().getSkill().consumeResource(context, consumable, this);
     }
 
     /**
@@ -143,7 +143,7 @@ public abstract class ISkillInstance<T extends SkillContext> {
      * @see ItemSkill#release(SkillContext, ISkillInstance)
      */
     public void release(T context) {
-        skill().release(context, this);
+        skill().getSkill().release(context, this);
     }
 
     /**

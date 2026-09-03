@@ -43,7 +43,7 @@ public record SkillTogglePacket(boolean enable) implements CustomPacketPayload {
      * 资源位置 "skill_toggle" 在模组的命名空间内唯一标识此数据包类型
      *
      * @see CustomPacketPayload.Type CustomPacketPayload.Type - Base type for packet identifiers
-     * @see Skiller#modLoc(Skiller#modLoc(String)) - Creates mod-scoped resource locations
+     * @see Skiller#modLoc(String) Skiller.modLoc - Creates mod-scoped resource locations
      * @since 1.0.0
      */
     public static final Type<SkillTogglePacket> TYPE =
@@ -120,7 +120,7 @@ public record SkillTogglePacket(boolean enable) implements CustomPacketPayload {
      * @param context The payload context providing access to the player and network information
      *                提供玩家和网络信息的负载上下文
      * @see IPayloadContext IPayloadContext - Context interface for packet handling
-     * @see ServerSkillCache#onToggle(ServerSkillCache#onToggle(ServerPlayer, boolean)) - Processes skill toggle requests
+     * @see ServerSkillCache#onToggle(ServerPlayer, boolean) ServerSkillCache.onToggle - Processes skill toggle requests
      * @see ServerPlayer ServerPlayer - Server-side player entity
      * @since 1.0.0
      */

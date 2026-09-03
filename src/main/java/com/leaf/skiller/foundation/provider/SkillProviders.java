@@ -132,6 +132,8 @@ public class SkillProviders {
      * @since 1.0.0
      */
     public static SkillBundle collectAllSkills(Player player) {
+        // TODO : 这里应该返回SkillComponent，需要显示按键信息，方便客户端和服务端进行按键处理
+
         SkillSet all = new SkillSet();
         for (SkillProvider provider : PROVIDERS) {
             provider.collectSkills(all, player);

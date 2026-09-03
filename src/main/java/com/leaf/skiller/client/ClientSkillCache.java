@@ -62,7 +62,7 @@ public class ClientSkillCache {
      * @see AllKeys#SKILL_KEYS
      * @since 1.0.0
      */
-    private static Map<Integer, Boolean> pressed = new HashMap<>();
+    private static final Map<Integer, Boolean> pressed = new HashMap<>();
 
     /**
      * The active skill bundle containing all skills available to the current player.
@@ -145,6 +145,9 @@ public class ClientSkillCache {
 
         // Monitor skill key state changes and send updates to server
         // 监控技能键状态变化并向服务器发送更新
+
+        // TODO : 同样地，这里只应该发送技能需要的按键状态的更改
+        // TODO : 这里需要使用 SkillProviders的 TODO 内容
         for (int idx : cacheKeys) {
             if (idx >= AllKeys.SKILL_KEYS.length) continue;
             boolean state = AllKeys.SKILL_KEYS[idx].isDown();

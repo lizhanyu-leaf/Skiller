@@ -4,6 +4,8 @@ import com.leaf.skiller.foundation.OwnedBySkills;
 import com.leaf.skiller.foundation.SkillData;
 import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.context.SkillContext;
+import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
+import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -202,7 +204,7 @@ public class SkillBundle implements OwnedBySkills {
     @SuppressWarnings("unchecked")
     @Override
     public <T extends SkillContext> boolean releaseSkills(SkillType type, T context) {
-        List<ISkillInstance<T>> skills = (List<ISkillInstance<T>>) (List<?>) skillData.get(type);
+        List<ISkillInstance<T>> skills = (List<ISkillInstance<T>>) (List<?>) getSkills(type);
         Player player = context.getPlayer();
 
         if (!player.isCreative()) {
@@ -225,6 +227,86 @@ public class SkillBundle implements OwnedBySkills {
 
         for (ISkillInstance<T> instance : skills) {
             instance.release(context);
+        }
+
+        return true;
+    }
+
+    /**
+     * Releases all skills of the specified type, creating each instance's context from the environment.
+     * 释放指定类型的所有技能，从环境为每个实例创建上下文。
+     * <p>
+     * Unlike {@link #releaseSkills(SkillType, SkillContext)}, which uses a single pre-built context
+     * for every instance, this overload creates a dedicated context for each skill instance via its
+     * own {@link SkillContextFactory}, using the instance's data to fill the context
+     * (see {@link SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)}).
+     * This is the preferred entry point when no context has been built yet, such as when
+     * reacting to a trigger event.
+     * 与{@link #releaseSkills(SkillType, SkillContext)}为所有实例使用单个预构建上下文不同，
+     * 此重载通过每个技能实例自己的 {@link SkillContextFactory} 为其创建专用上下文，
+     * 使用实例的数据填充上下文
+     * （见 {@link SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)}）。
+     * 当尚未构建上下文时（例如响应触发事件时），这是首选的入口点。
+     * </p>
+     * <p>
+     * The resource handling follows the same all-or-nothing strategy: all required resources
+     * are collected and checked before any is consumed, and in creative mode resources are
+     * not consumed at all.
+     * 资源处理遵循相同的全有或全无策略：在消耗之前收集并检查所有所需资源，
+     * 并且在创造模式下完全不消耗资源。
+     * </p>
+     *
+     * @param type The skill type to release
+     *             要释放的技能类型
+     * @param env The environment providing the player, level, trigger event and extra data
+     *            from which each context is created
+     *            提供玩家、等级、触发事件和额外数据的环境，上下文从中创建
+     * @return true if skills were successfully released (or none of this type exist),
+     *         false if resources were insufficient
+     *         如果技能成功释放（或该类型不存在任何技能）则返回 true，
+     *         如果资源不足则返回 false
+     * @throws ClassCastException If a context created by a factory is incompatible with its skill
+     *                            如果工厂创建的上下文与其技能不兼容
+     * @see #releaseSkills(SkillType, SkillContext)
+     * @see SkillContextEnvironment
+     * @see SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)
+     * @see ItemSkillRegistration#getFactory()
+     * @since 1.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public boolean releaseSkills(SkillType type, SkillContextEnvironment env) {
+        List<ISkillInstance<SkillContext>> skills = (List<ISkillInstance<SkillContext>>) (List<?>) getSkills(type);
+        if (skills == null || skills.isEmpty()) return true;
+
+        Player player = env.getPlayer();
+
+        // Create a dedicated context per instance via its own factory
+        // 通过每个实例自己的工厂为其创建专用上下文
+        Map<ISkillInstance<SkillContext>, SkillContext> contexts = new LinkedHashMap<>();
+        for (ISkillInstance<SkillContext> instance : skills) {
+            contexts.put(instance, instance.skill().getFactory().create(env, instance));
+        }
+
+        if (!player.isCreative()) {
+            Map<ResourceKey<SkillResource>, SkillResource.DelayConsumable> consumables =
+                    new HashMap<>();
+            for (ISkillInstance<SkillContext> instance : skills) {
+                consumables.computeIfAbsent(instance.getResource().key(),
+                        key -> instance.getResource().getDelayConsumable(player));
+                instance.consumeResource(contexts.get(instance), consumables.get(instance.getResource().key()));
+            }
+
+            for (SkillResource.DelayConsumable consumable : consumables.values()) {
+                if (!consumable.canConsume()) return false;
+            }
+
+            for (SkillResource.DelayConsumable consumable : consumables.values()) {
+                consumable.apply();
+            }
+        }
+
+        for (ISkillInstance<SkillContext> instance : skills) {
+            instance.release(contexts.get(instance));
         }
 
         return true;

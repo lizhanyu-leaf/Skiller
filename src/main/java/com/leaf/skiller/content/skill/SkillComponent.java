@@ -1,11 +1,13 @@
 package com.leaf.skiller.content.skill;
 
+import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.SkillBundle;
 import com.mojang.serialization.Codec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -25,11 +27,18 @@ import java.util.stream.Collectors;
  * 实现与 Minecraft 数据系统的无缝集成。
  * </p>
  *
+ * @param bindings The internal map of skill bindings, mapping integer keys to skill bundles.
+ *                 技能绑定的内部映射，将整数键映射到技能束。
+ *                 <p>
+ *                 Each key typically represents a slot ID or skill identifier, with the associated
+ *                 SkillBundle containing the skill instance and related data.
+ *                 每个键通常代表槽位 ID 或技能标识符，关联的 SkillBundle 包含技能实例和相关数据。
+ *                 </p>
  * @see SkillBundle
  * @see com.leaf.skiller.foundation.skill.ItemSkill
  * @since 1.0.0
  */
-public class SkillComponent {
+public record SkillComponent(Map<Integer, SkillBundle> bindings) {
     /**
      * Codec for serializing and deserializing SkillComponent objects.
      * 用于序列化和反序列化 SkillComponent 对象的编解码器。
@@ -83,17 +92,6 @@ public class SkillComponent {
             );
 
     /**
-     * The internal map of skill bindings, mapping integer keys to skill bundles.
- * 技能绑定的内部映射，将整数键映射到技能束。
-     * <p>
-     * Each key typically represents a slot ID or skill identifier, with the associated
-     * SkillBundle containing the skill instance and related data.
-     * 每个键通常代表槽位 ID 或技能标识符，关联的 SkillBundle 包含技能实例和相关数据。
-     * </p>
-     */
-    private final Map<Integer, SkillBundle> bindings;
-
-    /**
      * Constructs a new SkillComponent with the specified bindings.
      * 使用指定的绑定构造新的 SkillComponent。
      * <p>
@@ -105,12 +103,23 @@ public class SkillComponent {
      * @param bindings the map of integer keys to skill bundles
      *                 整数键到技能束的映射
      * @throws NullPointerException if bindings is null
-     *                               如果绑定为 null 则抛出异常
+     *                              如果绑定为 null 则抛出异常
      * @since 1.0.0
      */
-    public SkillComponent(Map<Integer, SkillBundle> bindings) {
-        this.bindings = bindings;
-    }
+    public SkillComponent {}
+
+    /**
+     * Empty skill component constant representing no skill bindings.
+     * 表示无技能绑定的空技能组件常量。
+     * <p>
+     * Use this constant when you need an empty component instead of creating a new instance.
+     * The bindings map of this constant is immutable.
+     * 当需要空组件时使用此常量，而不是创建新实例。此常量的绑定映射是不可变的。
+     * </p>
+     *
+     * @since 1.0.0
+     */
+    public static final SkillComponent EMPTY = new SkillComponent(Map.of());
 
     /**
      * Returns the immutable map of skill bindings.
@@ -122,10 +131,32 @@ public class SkillComponent {
      * </p>
      *
      * @return the map of integer keys to skill bundles
-     *         整数键到技能束的映射
+     * 整数键到技能束的映射
      * @since 1.0.0
      */
+    @Override
     public Map<Integer, SkillBundle> bindings() {
         return bindings;
+    }
+
+    /**
+     * Returns a list of all skill instances across every key binding in this component.
+     * 返回此组件中所有按键绑定下的全部技能实例列表。
+     * <p>
+     * This method flattens all bundles from all key bindings into a single list.
+     * The returned list is newly allocated and can be safely modified.
+     * 此方法将所有按键绑定的所有技能束展平为单个列表。
+     * 返回的列表是新分配的，可以安全地修改。
+     * </p>
+     *
+     * @return A list containing all skill instances from all bindings, or an empty list if none exist
+     * 包含所有绑定下所有技能实例的列表，如果不存在则返回空列表
+     * @see SkillBundle#getAllData()
+     * @since 1.0.0
+     */
+    public List<ISkillInstance<?>> getAllData() {
+        return bindings.values().stream()
+                .flatMap(bundle -> bundle.getAllData().stream())
+                .collect(Collectors.toList());
     }
 }

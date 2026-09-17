@@ -47,9 +47,7 @@ public interface SkillProvider {
      *                  用于累积技能的收集器实例（必需）。
      * @param player    The player to collect skills for (required).
      *                  要为其收集技能的玩家（必需）。
-     * @see SkillCollector#add(ISkillInstance)
-     * @see SkillCollector#add(SkillBundle)
-     * @see SkillCollector#addAll(List)
+     * @see SkillCollector#add(SkillComponent)
      * @since 1.0.0
      */
     void collectSkills(SkillCollector collector, Player player);
@@ -89,7 +87,7 @@ public interface SkillProvider {
      *                  要添加技能到的收集器（必需）。
      * @param stack     The ItemStack to extract skills from (required).
      *                  要从中提取技能的物品堆（必需）。
-     * @see SkillCollector#add(ISkillInstance)
+     * @see SkillCollector#add(SkillComponent)
      * @see SkillComponent
      * @since 1.0.0
      */
@@ -97,7 +95,7 @@ public interface SkillProvider {
         if (stack.isEmpty()) return;
         SkillComponent component = stack.get(AllDataComponents.SKILL_COMPONENT);
         if (component == null) return;
-        component.bindings().values().forEach(collector::add);
+        collector.add(component);
     }
 
     /**

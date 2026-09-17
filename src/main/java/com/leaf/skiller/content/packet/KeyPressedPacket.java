@@ -106,7 +106,7 @@ public record KeyPressedPacket(int keyIndex, boolean pressed) implements CustomP
      * @param context The payload context providing access to the player and network information
      *                提供玩家和网络信息的负载上下文
      * @see IPayloadContext IPayloadContext - Context interface for packet handling
-     * @see PlayerPressedKeys#setKeyPressed(PlayerPressedKeys#setKeyPressed(ServerPlayer, int, boolean)) - Updates key state
+     * @see PlayerPressedKeys#setKeyPressed - Updates key state
      * @see ServerPlayer ServerPlayer - Server-side player entity
      * @since 1.0.0
      */

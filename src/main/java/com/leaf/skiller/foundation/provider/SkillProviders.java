@@ -1,6 +1,6 @@
 package com.leaf.skiller.foundation.provider;
 
-import com.leaf.skiller.foundation.skill.SkillBundle;
+import com.leaf.skiller.content.skill.SkillComponent;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
@@ -29,9 +29,9 @@ import java.util.Set;
  * // 注册自定义提供者
  * SkillProviders.register(new MyCustomSkillProvider());
  *
- * // Collect all skills for a player
- * // 为玩家收集所有技能
- * SkillBundle skills = SkillProviders.collectAllSkills(player);
+ * // Collect all skills for a player (key bindings included)
+ * // 为玩家收集所有技能（包含按键绑定）
+ * SkillComponent skills = SkillProviders.collectAllSkills(player);
  *
  * // Collect all key bindings for a player
  * // 为玩家收集所有按键绑定
@@ -122,23 +122,21 @@ public class SkillProviders {
      *
      * @param player The player to collect skills for (required, non-null).
      *               要为其收集技能的玩家（必需，非空）。
-     * @return A {@link SkillBundle} containing all collected skills (non-null).
-     *         包含所有收集技能的 {@link SkillBundle}（非空）。
+     * @return A {@link SkillComponent} containing all collected skills with their key bindings (non-null).
+     *         包含所有收集技能及其按键绑定的 {@link SkillComponent}（非空）。
      * @throws NullPointerException if player is null.
      *                                如果玩家为null，则抛出NullPointerException。
      * @see SkillProvider#collectSkills(SkillCollector, Player)
      * @see SkillSet
-     * @see SkillBundle
+     * @see SkillComponent
      * @since 1.0.0
      */
-    public static SkillBundle collectAllSkills(Player player) {
-        // TODO : 这里应该返回SkillComponent，需要显示按键信息，方便客户端和服务端进行按键处理
-
+    public static SkillComponent collectAllSkills(Player player) {
         SkillSet all = new SkillSet();
         for (SkillProvider provider : PROVIDERS) {
             provider.collectSkills(all, player);
         }
-        return all.toBundle();
+        return all.toComponent();
     }
 
     /**

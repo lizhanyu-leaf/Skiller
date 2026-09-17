@@ -4,8 +4,8 @@ import com.leaf.skiller.AllKeys;
 import com.leaf.skiller.client.renderer.StrategyRenderers;
 import com.leaf.skiller.content.packet.KeyPressedPacket;
 import com.leaf.skiller.content.packet.SkillTogglePacket;
+import com.leaf.skiller.content.skill.SkillComponent;
 import com.leaf.skiller.foundation.provider.SkillProviders;
-import com.leaf.skiller.foundation.skill.SkillBundle;
 import com.leaf.skiller.util.KeyCooldown;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -30,7 +30,7 @@ import java.util.Set;
  * <li>Overall enable/disable state of the skill system - 技能系统的总体启用/禁用状态</li>
  * </ul>
  *
- * @see SkillBundle
+ * @see com.leaf.skiller.foundation.skill.SkillBundle
  * @see SkillProviders
  * @since 1.0.0
  */
@@ -72,12 +72,12 @@ public class ClientSkillCache {
  * 当技能系统启用时填充此包，禁用时清除。
      * </p>
      *
-     * @see SkillBundle
+     * @see com.leaf.skiller.foundation.skill.SkillBundle
      * @see #enable(Minecraft, Player)
      * @see #disable(Minecraft, Player)
      * @since 1.0.0
      */
-    public static SkillBundle skills;
+    public static SkillComponent skills;
 
     /**
      * Flag indicating whether the skill system is currently enabled.
@@ -143,11 +143,12 @@ public class ClientSkillCache {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // Monitor skill key state changes and send updates to server
-        // 监控技能键状态变化并向服务器发送更新
-
-        // TODO : 同样地，这里只应该发送技能需要的按键状态的更改
-        // TODO : 这里需要使用 SkillProviders的 TODO 内容
+        // Monitor skill key state changes and send updates to server.
+        // Only keys that actually have skills bound (derived from the SkillComponent)
+        // are monitored, so no unnecessary key state changes are sent.
+        // 监控技能键状态变化并向服务器发送更新。
+        // 仅监控实际绑定了技能的按键（从 SkillComponent 派生），
+        // 因此不会发送不必要的按键状态变化。
         for (int idx : cacheKeys) {
             if (idx >= AllKeys.SKILL_KEYS.length) continue;
             boolean state = AllKeys.SKILL_KEYS[idx].isDown();
@@ -206,8 +207,12 @@ public class ClientSkillCache {
     public static void enable(Minecraft mc, Player player) {
         if (!enable) {
             enable = true;
-            cacheKeys = SkillProviders.collectAllKeys(player);
             skills = SkillProviders.collectAllSkills(player);
+            // Derive the monitored keys from the component's bindings so only
+            // keys that actually have skills bound are tracked and synchronized.
+            // 从组件的绑定派生要监控的按键，这样只有实际绑定了技能的按键
+            // 才会被跟踪和同步。
+            cacheKeys = skills.bindings().keySet();
             StrategyRenderers.schedule();
 
             PacketDistributor.sendToServer(new SkillTogglePacket(true));
@@ -252,7 +257,7 @@ public class ClientSkillCache {
 
             // Clear the cache / 清空缓存
             cacheKeys.clear();
-            skills = SkillBundle.EMPTY;
+            skills = SkillComponent.EMPTY;
             StrategyRenderers.disable();
 
             PacketDistributor.sendToServer(new SkillTogglePacket(false));

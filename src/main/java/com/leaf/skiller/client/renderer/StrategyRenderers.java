@@ -1,5 +1,6 @@
 package com.leaf.skiller.client.renderer;
 
+import com.leaf.skiller.Skiller;
 import com.leaf.skiller.client.ClientSkillCache;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.renderer.StrategyRenderer;
@@ -188,16 +189,27 @@ public class StrategyRenderers {
         // Clear previous schedule / 清除先前的计划
         STAGE_RENDERERS.clear();
 
+        if (ClientSkillCache.skills == null) return;
+
         // Iterate through all active skills and schedule their renderers
         // 遍历所有活动技能并安排它们的渲染器
         ClientSkillCache.skills.getAllData().forEach(instance -> {
-            // Only process strategy skills (skills with visual effects)
-            // 仅处理策略技能（具有视觉效果的技能）
-            if (!(instance.skill() instanceof StrategySkill<?,?> strategySkill)) return;
+            // instance.skill() is the ItemSkillRegistration wrapper; the actual
+            // skill object is obtained via getSkill().
+            // instance.skill() 是 ItemSkillRegistration 包装器；实际技能对象需通过 getSkill() 获取。
+            if (!(instance.skill().getSkill() instanceof StrategySkill<?,?> strategySkill)) return;
 
             // Get the renderer for this strategy
             // 获取此策略的渲染器
             var renderer = getRenderer(strategySkill.strategy());
+            // A strategy without a registered renderer is skipped instead of
+            // throwing NPE and killing the whole schedule.
+            // 未注册渲染器的策略会被跳过，而不是抛出 NPE 使整个调度失效。
+            if (renderer == null) {
+                Skiller.LOGGER.warn("No StrategyRenderer registered for id {}, skipping skill {}",
+                        strategySkill.strategy().getRendererId(), instance.skill().getId());
+                return;
+            }
 
             // Create a lambda that binds the skill instance to the renderer
             // 创建一个将技能实例绑定到渲染器的lambda表达式

@@ -182,15 +182,22 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      */
     @Override
     public SkillData toData(I instance) {
+        ResourceLocation skillId = SkillerBuiltInRegistries.SKILLS.getKey(instance.skill());
+        ResourceLocation factoryId = SkillerBuiltInRegistries.SKILL_FACTORIES.getKey(this);
+        // Fail fast with a clear message instead of building data that cannot be
+        // serialized (a null factoryId used to NPE much later inside SkillData.toString).
+        // 快速失败并给出清晰信息，而不是构建无法序列化的数据
+        //（factoryId 为 null 时之前会在 SkillData.toString 中延迟 NPE）。
+        if (skillId == null || factoryId == null) {
+            throw new IllegalStateException(
+                    "Skill or factory is not registered: skill=" + skillId + ", factory=" + factoryId);
+        }
+
         CompoundTag nbt = instance.data().copy();
         nbt.putString(resourceRegistryKey, instance.getResource().key().location().toString());
         nbt.putInt(levelKey, instance.level());
 
-        return new SkillData(
-                SkillerBuiltInRegistries.SKILLS.getKey(instance.skill()),
-                SkillerBuiltInRegistries.SKILL_FACTORIES.getKey(this),
-                nbt
-        );
+        return new SkillData(skillId, factoryId, nbt);
     }
 
     /**

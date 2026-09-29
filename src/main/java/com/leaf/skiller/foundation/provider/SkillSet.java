@@ -125,6 +125,10 @@ public class SkillSet implements SkillCollector {
     private void addInstance(int key, ISkillInstance<?> instance) {
         ResourceLocation skillId = SkillerBuiltInRegistries.SKILLS
                 .getKey(instance.skill());
+        // Unregistered skills have no ID; adding them under a null key would
+        // make all of them collide into a single entry.
+        // 未注册的技能没有ID；以 null 键添加会让它们全部挤在同一个条目中互相覆盖。
+        if (skillId == null) return;
         bestByKey.computeIfAbsent(key, k -> new HashMap<>())
                 .merge(skillId, instance, (existing, candidate) ->
                         candidate.level() > existing.level() ? candidate : existing);

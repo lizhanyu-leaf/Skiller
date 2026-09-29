@@ -59,46 +59,6 @@ public class AllKeys {
     };
 
     /**
-     * Key binding for enabling or activating skills.
-     * 用于启用或激活技能的按键绑定。
-     * <p>
-     * This key is used to toggle skill activation or enable specific skills
-     * depending on the context. Players can press this key to activate
-     * the skill system or enable individual skills.
-     * 此键用于根据上下文切换技能激活或启用特定技能。
-     * 玩家可以按此键激活技能系统或启用单个技能。
-     * </p>
-     * <p>
-     * Default binding: R key (can be customized in controls menu)
-     * 默认绑定：R 键（可在控制菜单中自定义）
-     * </p>
-     */
-    public static final KeyMapping ENABLE_SKILL = new KeyMapping(
-            "key.skiller.enable_skill",
-            InputConstants.KEY_R,
-            "key.categories.skiller");
-
-    /**
-     * Key binding for disabling or deactivating skills.
-     * 用于禁用或停用技能的按键绑定。
-     * <p>
-     * This key is used to deactivate active skills or disable the skill
-     * system temporarily. Pressing this key can cancel skill activations
-     * or turn off specific skills.
-     * 此键用于停用活动技能或临时禁用技能系统。
-     * 按此键可以取消技能激活或关闭特定技能。
-     * </p>
-     * <p>
-     * Default binding: Y key (can be customized in controls menu)
-     * 默认绑定：Y 键（可在控制菜单中自定义）
-     * </p>
-     */
-    public static final KeyMapping DISABLE_SKILL = new KeyMapping(
-            "key.skiller.disable_skill",
-            InputConstants.KEY_Y,
-            "key.categories.skiller");
-
-    /**
      * Event handler that registers all key mappings with Minecraft's key binding system.
      * 事件处理器，向 Minecraft 的按键绑定系统注册所有按键映射。
      * <p>
@@ -125,7 +85,5 @@ public class AllKeys {
         for (KeyMapping key : SKILL_KEYS) {
             event.register(key);
         }
-        event.register(ENABLE_SKILL);
-        event.register(DISABLE_SKILL);
     }
 }

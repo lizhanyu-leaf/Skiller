@@ -1,7 +1,11 @@
 package com.leaf.skiller.content.packet;
 
 import com.leaf.skiller.Skiller;
+import com.leaf.skiller.content.skill.SkillComponent;
+import com.leaf.skiller.foundation.skill.SkillBundle;
+import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
 import com.leaf.skiller.server.PlayerPressedKeys;
+import com.leaf.skiller.server.ServerSkillCache;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -23,7 +27,6 @@ import org.jetbrains.annotations.NotNull;
  *                 被按下/释放的技能按键的唯一索引标识符
  * @param pressed True if the key is currently pressed, false if it's being released
  *                如果按键当前被按下则为 true，如果正在释放则为 false
- * @see SkillTogglePacket SkillTogglePacket - Packet for toggling skill enable/disable state
  * @see PlayerPressedKeys PlayerPressedKeys - Server-side key press state manager
  * @see CustomPacketPayload CustomPacketPayload - Base interface for custom network packets
  * @since 1.0.0

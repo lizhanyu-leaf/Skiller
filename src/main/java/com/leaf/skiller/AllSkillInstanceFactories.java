@@ -69,63 +69,69 @@ public enum AllSkillInstanceFactories {
     private final ResourceLocation id;
 
     /**
-     * The supplier that creates new instances of this skill factory.
-     * 创建此技能工厂新实例的供应商。
+     * The single factory instance for this entry, created once from the supplier.
+     * 此条目唯一的工厂实例，由供应商创建一次。
      * <p>
-     * This supplier is called during registration and when factory instances
-     * are needed for skill creation. It encapsulates the factory constructor
-     * and any required initialization parameters.
-     * 此供应商在注册期间以及需要工厂实例进行技能创建时调用。
-     * 它封装工厂构造函数和任何所需的初始化参数。
+     * Creating the instance exactly once is essential: the static initializer
+     * registers THIS instance into {@link SkillerBuiltInRegistries#SKILL_FACTORIES},
+     * and {@link #getFactory()} must keep returning that same registered object.
+     * The previous per-call {@code factory.get()} handed out fresh, unregistered
+     * instances, so registry lookups by instance returned null and serialized
+     * skill data lost its factory id.
+     * 只创建一次实例至关重要：静态初始化块注册的是本实例，
+     * {@link #getFactory()} 必须始终返回同一个已注册对象。
+     * 之前每次调用 {@code factory.get()} 都会产生未注册的新实例，
+     * 导致按实例查询注册表返回 null，序列化的技能数据丢失工厂ID。
      * </p>
      */
-    private final Supplier<SkillInstanceFactory<?, ?>> factory;
+    private final SkillInstanceFactory<?, ?> factory;
 
     /**
      * Constructs a new skill instance factory enum entry with the specified ID and factory supplier.
      * 使用指定的 ID 和工厂供应商构造新的技能实例工厂枚举条目。
      * <p>
      * This constructor creates a namespaced resource location for the factory
-     * ID and stores the supplier for creating factory instances.
-     * 此构造函数为工厂 ID 创建命名空间资源位置，并存储用于创建
-     * 工厂实例的供应商。
+     * ID and eagerly creates the single factory instance via the supplier.
+     * 此构造函数为工厂 ID 创建命名空间资源位置，
+     * 并通过供应商立即创建唯一的工厂实例。
      * </p>
      *
      * @param id The unique identifier for this factory type (without mod namespace)
      *           此工厂类型的唯一标识符（不带模组命名空间）
-     * @param factory A supplier that creates new instances of this factory type
-     *                创建此工厂类型新实例的供应商
+     * @param factory A supplier that creates the factory instance (invoked once)
+     *                创建工厂实例的供应商（仅调用一次）
      * @see ResourceLocation
      * @see Skiller#modLoc(String)
      * @since 1.0.0
      */
     AllSkillInstanceFactories(String id, Supplier<SkillInstanceFactory<?, ?>> factory) {
         this.id = Skiller.modLoc(id);
-        this.factory = factory;
+        this.factory = factory.get();
     }
 
     /**
      * Retrieves the skill instance factory for this entry, type-cast to the specified context type.
      * 检索此条目的技能实例工厂，类型转换为指定的上下文类型。
      * <p>
-     * This method provides type-safe access to the factory by casting it to
-     * work with the specified skill context type. The unchecked cast is safe
-     * because factories are registered with their correct types.
-     * 此方法通过将工厂转换为使用指定的技能上下文类型来提供类型安全
-     * 的访问。未检查的转换是安全的，因为工厂以正确的类型注册。
+     * This method returns the single instance created in the constructor — the
+     * exact instance registered by the static initializer — so registry lookups
+     * by instance identity (e.g. resolving the factory id during serialization)
+     * succeed.
+     * 此方法返回构造函数中创建的唯一实例——即静态初始化块注册的那个实例——
+     * 因此按实例身份的注册表查询（如序列化时解析工厂ID）能够成功。
      * </p>
      *
      * @param <T> The skill context type that this factory works with
      *            此工厂使用的技能上下文类型
-     * @return A type-casted skill instance factory for the specified context type
-     *         用于指定上下文类型的类型转换技能实例工厂
+     * @return The registered skill instance factory for the specified context type
+     *         用于指定上下文类型的已注册技能实例工厂
      * @see SkillInstanceFactory
      * @see SkillContext
      * @since 1.0.0
      */
     @SuppressWarnings("unchecked")
     public <T extends SkillContext> SkillInstanceFactory<T, ? extends ISkillInstance<T>> getFactory() {
-        return (SkillInstanceFactory<T, ? extends ISkillInstance<T>>) factory.get();
+        return (SkillInstanceFactory<T, ? extends ISkillInstance<T>>) factory;
     }
 
     /**
@@ -175,66 +181,4 @@ public enum AllSkillInstanceFactories {
      * @since 1.0.0
      */
     public static void register() {}
-
-    /**
-     * Creates a custom skill instance factory with the specified creation and serialization functions.
-     * 使用指定的创建和序列化函数创建自定义技能实例工厂。
-     * <p>
-     * This utility method provides a concise way to create skill instance factories
-     * using lambda expressions or method references. It encapsulates the three
-     * core operations required of all skill factories.
-     * 此实用方法提供了一种使用 lambda 表达式或方法引用创建技能实例
-     * 工厂的简洁方式。它封装了所有技能工厂所需的三个核心操作。
-     * </p>
-     * <p>
-     * The factory creates skill instances in two ways:
-     * 工厂以两种方式创建技能实例：
-     * <ul>
-     * <li>From an ItemSkill definition (default state)
-     * 从 ItemSkill 定义（默认状态）</li>
-     * <li>From persisted SkillData (restoring saved state)
-     * 从持久化的 SkillData（恢复保存的状态）</li>
-     * </ul>
-     * And can serialize instances back to SkillData.
-     * 并可以将实例序列化回 SkillData。
-     * </p>
-     *
-     * @param <T> The skill context type
-     *            技能上下文类型
-     * @param <I> The skill instance type
-     *            技能实例类型
-     * @param createDefault Function to create a skill instance from an ItemSkill definition
-     *                      从 ItemSkill 定义创建技能实例的函数
-     * @param createData Function to create a skill instance from persisted SkillData
-     *                   从持久化的 SkillData 创建技能实例的函数
-     * @param toData Function to serialize a skill instance back to SkillData
-     *               将技能实例序列化回 SkillData 的函数
-     * @return A new skill instance factory with the specified behavior
-     *         具有指定行为的新技能实例工厂
-     * @see SkillInstanceFactory
-     * @see ItemSkill
-     * @see ISkillInstance
-     * @see SkillData
-     * @since 1.0.0
-     */
-    private static <T extends SkillContext, I extends ISkillInstance<T>> SkillInstanceFactory<T, I> of(
-            Function<ItemSkillRegistration<T>, I> createDefault, Function<SkillData, I> createData, Function<I, SkillData> toData
-    ) {
-        return new SkillInstanceFactory<>() {
-            @Override
-            public I createDefault(ItemSkillRegistration<T> skill) {
-                return createDefault.apply(skill);
-            }
-
-            @Override
-            public I createFromData(SkillData data) {
-                return createData.apply(data);
-            }
-
-            @Override
-            public SkillData toData(I instance) {
-                return toData.apply(instance);
-            }
-        };
-    }
 }

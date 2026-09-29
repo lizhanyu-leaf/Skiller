@@ -1,6 +1,5 @@
 package com.leaf.skiller.foundation;
 
-import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ItemSkill;
 import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import com.leaf.skiller.foundation.skill.SkillType;
@@ -264,44 +263,4 @@ public interface OwnedBySkills {
         }
         return this;
     }
-
-    /**
-     * Releases all skills of the specified type with the given context.
-     * 使用给定的上下文释放指定类型的所有技能。
-     * Releases all skills of the specified type with the given context.
-     * 使用给定的上下文释放指定类型的所有技能。
-     * <p>
-     * This method iterates through all skills of the specified type and
-     * releases them with the provided context.
-     * 此方法遍历指定类型的所有技能，并使用提供的上下文释放它们。
-     * </p>
-     * <p>
-     * Returns true if at least one skill was successfully released.
-     * 如果至少成功释放了一个技能，则返回true。
-     * </p>
-     * <p>
-     * May throw ClassCastException if the context type doesn't match the
-     * skills' expected context type.
-     * 如果上下文类型与技能期望的上下文类型不匹配，可能会抛出ClassCastException。
-     * </p>
-     *
-     * @param <T>     The type of skill context
-     *                技能上下文的类型
-     * @param type    The skill type to release
-     *                要释放的技能类型
-     * @param context The skill context to use for releasing skills
-     *                用于释放技能的技能上下文
-     *
-     * @return true if at least one skill was released, false otherwise
-     *         如果至少释放了一个技能，则返回true；否则返回false
-     *
-     * @throws ClassCastException if the context type is incompatible with the skills
-     *         如果上下文类型与技能不兼容
-     *
-     * @since 1.0.0
-     * @see SkillType
-     * @see SkillContext
-     * @see ItemSkill#release
-     */
-    <T extends SkillContext> boolean releaseSkills(SkillType type, T context);
 }

@@ -3,60 +3,58 @@ package com.leaf.skiller.client;
 import com.leaf.skiller.AllKeys;
 import com.leaf.skiller.client.renderer.StrategyRenderers;
 import com.leaf.skiller.content.packet.KeyPressedPacket;
-import com.leaf.skiller.content.packet.SkillTogglePacket;
+import com.leaf.skiller.content.packet.SyncSkillComponentPacket;
 import com.leaf.skiller.content.skill.SkillComponent;
 import com.leaf.skiller.foundation.provider.SkillProviders;
-import com.leaf.skiller.util.KeyCooldown;
+import com.leaf.skiller.foundation.skill.ISkillInstance;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Client-side cache for managing skill system state and key bindings.
  * 客户端缓存，用于管理系统技能状态和按键绑定。
  * <p>
- * This class maintains the client-side state of the skill system including:
- * 该类维护技能系统的客户端状态，包括：
+ * The skill system's enable/disable timing is decided by the SERVER: any held
+ * skill key enables it, no held skill key disables it. This class therefore has
+ * two always-on duties plus two server-driven transitions:
+ * 技能系统的启用/禁用时机由服务端决定：任意技能键被按住即启用，
+ * 没有任何技能键被按住即禁用。因此此类有两个常驻职责和两个服务端驱动的转换：
  * <ul>
- * <li>Cached key indices for skill key bindings - 技能按键绑定的缓存键索引</li>
- * <li>Key press states for each skill key - 每个技能键的按键状态</li>
- * <li>Active skill bundle for the current player - 当前玩家的活动技能包</li>
- * <li>Overall enable/disable state of the skill system - 技能系统的总体启用/禁用状态</li>
+ * <li>Always monitor every skill key and send state changes to the server —
+ * the server derives the toggle timing from them.
+ * 始终监控所有技能键并把状态变化发送到服务端——服务端据此判断开关时机。</li>
+ * <li>Always track the pressed state for client-side preview gating.
+ * 始终跟踪按键按下状态，供客户端预览渲染的门控使用。</li>
+ * <li>On a sync request (enable): collect skills, schedule renderers, and
+ * answer with {@link SyncSkillComponentPacket} — the client is the single
+ * source of truth for skill data.
+ * 收到同步请求（启用）时：收集技能、调度渲染，并以
+ * {@link SyncSkillComponentPacket} 应答——客户端是技能数据的唯一事实来源。</li>
+ * <li>On a sync request (disable): clear the local cache and rendering.
+ * 收到同步请求（禁用）时：清理本地缓存和渲染。</li>
  * </ul>
  *
- * @see com.leaf.skiller.foundation.skill.SkillBundle
- * @see SkillProviders
+ * @see com.leaf.skiller.content.packet.SkillSyncRequestPacket
+ * @see KeyPressedPacket
+ * @see com.leaf.skiller.server.PlayerPressedKeys
  * @since 1.0.0
  */
 public class ClientSkillCache {
-    /**
-     * Set of cached key indices for skill key bindings.
-     技能按键绑定的缓存键索引集合。
-     * <p>
-     * Stores the indices of skill keys that are currently active and being monitored.
-     存储当前活动且正在被监控的技能键索引。
-     * </p>
-     *
-     * @see AllKeys#SKILL_KEYS
-     * @since 1.0.0
-     */
-    private static Set<Integer> cacheKeys = new HashSet<>();
 
     /**
      * Map tracking the pressed state of each skill key.
-     跟踪每个技能键按下状态的映射。
+     * 跟踪每个技能键按下状态的映射。
      * <p>
-     * Key: Integer index of the skill key
- * 键：技能键的整数索引
-     * <br>
-     * Value: Boolean indicating whether the key is currently pressed (true) or released (false)
- * 值：布尔值，表示键当前是否被按下（true）或释放（false）
+     * Key: index into {@link AllKeys#SKILL_KEYS}; value: whether the key is
+     * currently held. This tracks REAL input and is intentionally NOT cleared on
+     * disable — clearing it would swallow the next release packet, leaving the
+     * server believing a key is still held.
+     * 键：{@link AllKeys#SKILL_KEYS} 的索引；值：按键当前是否被按住。
+     * 这里跟踪的是真实输入，禁用时有意不清除——
+     * 清除会吞掉下一次松键数据包，使服务端误以为按键仍被按住。
      * </p>
      *
      * @see AllKeys#SKILL_KEYS
@@ -65,50 +63,36 @@ public class ClientSkillCache {
     private static final Map<Integer, Boolean> pressed = new HashMap<>();
 
     /**
-     * The active skill bundle containing all skills available to the current player.
- * 包含当前玩家可用所有技能的活动技能包。
+     * The active skill component containing all skills available to the current player.
+     * 包含当前玩家可用所有技能的活动技能组件。
      * <p>
-     * This bundle is populated when the skill system is enabled and cleared when disabled.
- * 当技能系统启用时填充此包，禁用时清除。
+     * Populated when a server sync request enables the system, cleared on disable.
+     * 收到服务端同步请求启用时填充，禁用时清空。
      * </p>
      *
-     * @see com.leaf.skiller.foundation.skill.SkillBundle
-     * @see #enable(Minecraft, Player)
-     * @see #disable(Minecraft, Player)
+     * @see SkillComponent
+     * @see #handleSyncRequest(boolean)
      * @since 1.0.0
      */
     public static SkillComponent skills;
 
     /**
-     * Flag indicating whether the skill system is currently enabled.
- * 指示技能系统当前是否启用的标志。
-     * <p>
-     * When true, the system monitors key inputs and renders skill effects.
- * 为true时，系统监控按键输入并渲染技能效果。
-     * When false, all skill-related functionality is suspended.
- * 为false时，所有相关技能功能被暂停。
-     * </p>
+     * Flag mirroring the server-side skill system state.
+     * 镜像服务端技能系统状态的标志。
      *
      * @see #isEnable()
-     * @see #enable(Minecraft, Player)
-     * @see #disable(Minecraft, Player)
+     * @see #handleSyncRequest(boolean)
      * @since 1.0.0
      */
     private static boolean enable = false;
 
     /**
      * Checks whether the skill system is currently enabled.
- * 检查技能系统当前是否已启用。
-     * <p>
-     * Returns true if the skill system is active and monitoring key inputs.
- * 如果技能系统处于活动状态并正在监控按键输入，则返回true。
-     * Returns false if the system is disabled and skill functionality is suspended.
- * 如果系统被禁用且技能功能被暂停，则返回false。
-     * </p>
+     * 检查技能系统当前是否已启用。
      *
-     * @return true if the skill system is enabled, false otherwise - 如果技能系统已启用则返回true，否则返回false
-     * @see #enable(Minecraft, Player)
-     * @see #disable(Minecraft, Player)
+     * @return true if the skill system is enabled, false otherwise
+     *         如果技能系统已启用则返回 true，否则返回 false
+     * @see #handleSyncRequest(boolean)
      * @since 1.0.0
      */
     public static boolean isEnable() {
@@ -116,151 +100,126 @@ public class ClientSkillCache {
     }
 
     /**
-     * Handles keyboard input for skill key bindings and system toggle keys.
- * 处理技能按键绑定和系统切换键的键盘输入。
+     * Checks whether a skill key bound to the given skill instance is currently held.
+     * 检查绑定到给定技能实例的技能键当前是否被按住。
      * <p>
-     * This method is called each frame to process key input events. It performs two main functions:
- * 此方法每帧调用一次以处理按键输入事件。它执行两个主要功能：
-     * <ul>
-     * <li>Monitors all cached skill keys and sends state changes to the server when keys are pressed or released
- * - 监控所有缓存的技能键，当按键被按下或释放时将状态更改发送到服务器</li>
-     * <li>Checks for enable/disable key presses to toggle the skill system on/off
- * - 检查启用/禁用按键以切换技能系统的开/关状态</li>
-     * </ul>
+     * Used by client-side preview renderers (e.g. the entity outline renderer) to
+     * gate rendering on the skill key, so a preview only shows while the key
+     * trigger is active and never for other triggers such as block right-click.
+     * 供客户端预览渲染器（例如实体轮廓渲染器）使用，以技能键作为渲染门控，
+     * 使预览只在按键触发期间显示，而其他触发方式（如方块右键）不会显示预览。
+     * </p>
+     *
+     * @param instance The skill instance to look up the binding for
+     *                 要查询绑定的技能实例
+     * @return true if any key bound to this skill is currently pressed
+     *         如果绑定此技能的任意按键当前被按住则返回 true
+     * @see #skills
+     * @see #pressed
+     * @since 1.0.0
+     */
+    public static boolean isInstanceKeyPressed(ISkillInstance<?> instance) {
+        if (skills == null) return false;
+        for (var entry : skills.bindings().entrySet()) {
+            boolean bound = entry.getValue().getAllData().stream()
+                    .anyMatch(i -> i.skill().equals(instance.skill()));
+            if (bound && pressed.getOrDefault(entry.getKey(), false)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Monitors every skill key and sends state changes to the server.
+     * 监控所有技能键并把状态变化发送到服务端。
      * <p>
-     * State changes are synchronized with the server via network packets to ensure multiplayer consistency.
- * 状态更改通过网络数据包与服务器同步，以确保多人游戏的一致性。
+     * Runs unconditionally — even while the skill system is disabled — because
+     * the server decides the enable/disable timing from exactly these state
+     * changes: any held skill key enables, no held skill key disables.
+     * 无条件运行——即使技能系统处于禁用状态——
+     * 因为服务端正是依据这些状态变化来决定启用/禁用时机：
+     * 任意技能键被按住即启用，没有任何技能键被按住即禁用。
+     * </p>
+     * <p>
+     * Only state <em>changes</em> are sent, so both the press and the release
+     * edge reach the server exactly once.
+     * 只发送状态<em>变化</em>，因此按下沿和松开沿都恰好到达服务端一次。
      * </p>
      *
      * @see KeyPressedPacket
-     * @see SkillTogglePacket
-     * @see KeyCooldown#canToggle()
-     * @see #enable(Minecraft, Player)
-     * @see #disable(Minecraft, Player)
+     * @see com.leaf.skiller.server.PlayerPressedKeys#setKeyPressed
      * @since 1.0.0
      */
     public static void onKeyInput() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // Monitor skill key state changes and send updates to server.
-        // Only keys that actually have skills bound (derived from the SkillComponent)
-        // are monitored, so no unnecessary key state changes are sent.
-        // 监控技能键状态变化并向服务器发送更新。
-        // 仅监控实际绑定了技能的按键（从 SkillComponent 派生），
-        // 因此不会发送不必要的按键状态变化。
-        for (int idx : cacheKeys) {
-            if (idx >= AllKeys.SKILL_KEYS.length) continue;
+        for (int idx = 0; idx < AllKeys.SKILL_KEYS.length; idx++) {
             boolean state = AllKeys.SKILL_KEYS[idx].isDown();
-            if (pressed.get(idx) != state) {
+            // Keys have no entry until their first state change; defaulting to
+            // "not pressed" avoids unboxing a null on the very first press.
+            // 按键在首次状态变化前没有条目；默认视为未按下，
+            // 避免第一次按下时对 null 拆箱。
+            boolean previous = pressed.getOrDefault(idx, false);
+            if (previous != state) {
                 pressed.put(idx, state);
                 PacketDistributor.sendToServer(new KeyPressedPacket(idx, state));
             }
         }
-
-        // Handle enable/disable toggle keys
-        // 处理启用/禁用切换键
-        if (AllKeys.ENABLE_SKILL.isDown()) {
-            if (!KeyCooldown.canToggle()) return;
-            mc.player.displayClientMessage(Component.translatable("message.skiller.enabled"), true);
-            ClientSkillCache.enable(mc, mc.player);
-        }
-        else if (AllKeys.DISABLE_SKILL.isDown()) {
-            if (!KeyCooldown.canToggle()) return;
-            mc.player.displayClientMessage(Component.translatable("message.skiller.disabled"), true);
-            ClientSkillCache.disable(mc, mc.player);
-        }
     }
 
     /**
-     * Enables the skill system for the specified player.
- * 为指定玩家启用技能系统。
+     * Applies a server-driven enable/disable decision on the client.
+     * 在客户端执行服务端驱动的启用/禁用决定。
      * <p>
-     * When called, this method performs the following initialization steps:
- * 调用时，此方法执行以下初始化步骤：
-     * <ul>
-     * <li>Sets the enable flag to true
- * - 将启用标志设置为true</li>
-     * <li>Collects and caches all skill key bindings for the player
- * - 收集并缓存玩家的所有技能按键绑定</li>
-     * <li>Collects and stores all skills available to the player in the skill bundle
- * - 收集并在技能包中存储玩家可用的所有技能</li>
-     * <li>Schedules rendering for all strategy skills
- * - 安排所有策略技能的渲染</li>
-     * <li>Sends a packet to the server to notify that the skill system has been enabled
- * - 向服务器发送数据包以通知技能系统已启用</li>
-     * </ul>
+     * On enable: collects the player's skills locally (the client is the single
+     * source of truth), schedules strategy rendering, and answers the server
+     * with {@link SyncSkillComponentPacket} so the server stores exactly what
+     * the client collected. On disable: clears the local cache and rendering.
+     * 启用时：在本地收集玩家技能（客户端是唯一事实来源）、
+     * 调度策略渲染，并以 {@link SyncSkillComponentPacket} 应答服务端，
+     * 使服务端存储的正是客户端收集的数据。禁用时：清理本地缓存和渲染。
+     * </p>
      * <p>
-     * This method is idempotent - calling it when already enabled has no effect.
- * 此方法是幂等的 - 在已启用时调用它无效。
+     * Both transitions are idempotent. The {@code pressed} map is intentionally
+     * left untouched — it tracks real input and must survive toggles, otherwise
+     * the next release edge would be swallowed.
+     * 两个转换都是幂等的。有意不动 pressed 映射——
+     * 它跟踪真实输入且必须跨开关保留，否则下一个松开沿会被吞掉。
      * </p>
      *
-     * @param mc The Minecraft client instance - Minecraft客户端实例
-     * @param player The player for whom to enable the skill system - 要为其启用技能系统的玩家
-     * @see SkillProviders#collectAllKeys(Player)
-     * @see SkillProviders#collectAllSkills(Player)
-     * @see StrategyRenderers#schedule()
-     * @see SkillTogglePacket
-     * @see #disable(Minecraft, Player)
+     * @param enableRequest {@code true} to enable and sync the component,
+     *                      {@code false} to disable locally
+     *                      为 {@code true} 时启用并同步组件，
+     *                      为 {@code false} 时本地禁用
+     * @see com.leaf.skiller.content.packet.SkillSyncRequestPacket
+     * @see #pressed
      * @since 1.0.0
      */
-    public static void enable(Minecraft mc, Player player) {
-        if (!enable) {
+    public static void handleSyncRequest(boolean enableRequest) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        if (enableRequest) {
+            if (enable) return;
             enable = true;
-            skills = SkillProviders.collectAllSkills(player);
-            // Derive the monitored keys from the component's bindings so only
-            // keys that actually have skills bound are tracked and synchronized.
-            // 从组件的绑定派生要监控的按键，这样只有实际绑定了技能的按键
-            // 才会被跟踪和同步。
-            cacheKeys = skills.bindings().keySet();
+
+            skills = SkillProviders.collectAllSkills(mc.player);
             StrategyRenderers.schedule();
 
-            PacketDistributor.sendToServer(new SkillTogglePacket(true));
-        }
-    }
-
-    /**
-     * Disables the skill system for the specified player.
- * 为指定玩家禁用技能系统。
-     * <p>
-     * When called, this method performs the following cleanup steps:
- * 调用时，此方法执行以下清理步骤：
-     * <ul>
-     * <li>Sets the enable flag to false
- * - 将启用标志设置为false</li>
-     * <li>Clears all cached skill key bindings
- * - 清除所有缓存的技能按键绑定</li>
-     * <li>Resets the skill bundle to empty, effectively removing all skills
- * - 将技能包重置为空，实际上移除了所有技能</li>
-     * <li>Disables rendering for all strategy skills
- * - 禁用所有策略技能的渲染</li>
-     * <li>Sends a packet to the server to notify that the skill system has been disabled
- * - 向服务器发送数据包以通知技能系统已禁用</li>
-     * </ul>
-     * <p>
-     * This method is idempotent - calling it when already disabled has no effect.
- * 此方法是幂等的 - 在已禁用时调用它无效。
-     * </p>
-     *
-     * @param mc The Minecraft client instance - Minecraft客户端实例
-     * @param player The player for whom to disable the skill system - 要为其禁用技能系统的玩家
-     * @see SkillProviders#collectAllKeys(Player)
-     * @see SkillProviders#collectAllSkills(Player)
-     * @see StrategyRenderers#disable()
-     * @see SkillTogglePacket
-     * @see #enable(Minecraft, Player)
-     * @since 1.0.0
-     */
-    public static void disable(Minecraft mc, Player player) {
-        if (enable) {
+            // Answer the server with the merged component; the server only
+            // holds a placeholder until this arrives.
+            // 将合并后的组件应答给服务端；在此到达之前服务端只有占位数据。
+            PacketDistributor.sendToServer(new SyncSkillComponentPacket(skills));
+        } else {
+            if (!enable) return;
             enable = false;
 
-            // Clear the cache / 清空缓存
-            cacheKeys.clear();
+            // Do NOT clear `pressed`: it tracks real input across toggles.
+            // 不要清除 pressed：它跨开关跟踪真实输入。
             skills = SkillComponent.EMPTY;
             StrategyRenderers.disable();
-
-            PacketDistributor.sendToServer(new SkillTogglePacket(false));
         }
     }
 }

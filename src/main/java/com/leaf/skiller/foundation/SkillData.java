@@ -104,6 +104,11 @@ public record SkillData(ResourceLocation skillId, ResourceLocation factoryId, Co
      */
     @Override
     public @NotNull String toString() {
-        return skillId.toString() + nbt.toString();
+        // Always embed the factory ID into the serialized tag so that
+        // {@link #fromString(String)} can restore the record losslessly.
+        // 总是将工厂ID嵌入序列化标签，使 {@link #fromString(String)} 能够无损还原。
+        CompoundTag tag = nbt.copy();
+        tag.putString("Factory", factoryId.toString());
+        return skillId.toString() + tag;
     }
 }

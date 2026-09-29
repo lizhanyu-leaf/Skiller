@@ -32,7 +32,9 @@ public class SkillContextEnvironment {
         if (triggerEvent != null) {
             this.eventClass = triggerEvent.getClass();
         }
-        this.extraData = extraData;
+        // Defensive: a null map would break extraData(...) later.
+        // 防御：null 映射会在此后的 extraData(...) 调用中引发 NPE。
+        this.extraData = extraData != null ? extraData : new HashMap<>();
     }
 
     public SkillContextEnvironment(Player player, Level level, Event triggerEvent) {
@@ -44,6 +46,10 @@ public class SkillContextEnvironment {
     public Level getLevel() { return level; }
     public SkillTriggerEvent getTriggerEvent() { return triggerEvent; }
     public Object getEvent() {
+        // Returns null when this environment was created without a trigger event,
+        // instead of throwing NPE on the null event class.
+        // 当环境创建时没有触发事件时返回 null，而不是因空的イベント类抛出 NPE。
+        if (eventClass == null) return null;
         return triggerEvent.getAs(eventClass);
     }
     public <T> T getExtraData(String key, Class<T> clazz) {

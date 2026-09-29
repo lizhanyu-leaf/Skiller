@@ -176,77 +176,18 @@ public class SkillBundle implements OwnedBySkills {
     }
 
     /**
-     * Releases all skills of the specified type, consuming resources and executing effects.
-     * 释放指定类型的所有技能，消耗资源并执行效果
-     * <p>
-     * This method checks if all required resources are available before releasing skills.
-     * In creative mode, resources are not consumed. All resources must be available
-     * for any skill to be released.
-     * 此方法在释放技能之前检查所有所需资源是否可用。在创造模式下不会消耗资源。
-     * 所有资源必须可用才能释放任何技能
-     * </p>
-     *
-     * @param <T> The type of skill context
-     *            技能上下文的类型
-     * @param type The skill type to release
-     *             要释放的技能类型
-     * @param context The skill context containing player and environment information
-     *                包含玩家和环境信息的技能上下文
-     * @return true if skills were successfully released, false if resources were insufficient
-     *         如果技能成功释放则返回 true，如果资源不足则返回 false
-     * @throws ClassCastException If the context type is incompatible with the skill instances
-     *                             如果上下文类型与技能实例不兼容
-     * @see OwnedBySkills#releaseSkills(SkillType, SkillContext)
-     * @see SkillResource
-     * @see SkillContext
-     * @since 1.0.0
-     */
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T extends SkillContext> boolean releaseSkills(SkillType type, T context) {
-        List<ISkillInstance<T>> skills = (List<ISkillInstance<T>>) (List<?>) getSkills(type);
-        Player player = context.getPlayer();
-
-        if (!player.isCreative()) {
-            Map<ResourceKey<SkillResource>, SkillResource.DelayConsumable> consumables =
-                    new HashMap<>();
-            for (ISkillInstance<T> instance : skills) {
-                consumables.computeIfAbsent(instance.getResource().key(),
-                        key -> instance.getResource().getDelayConsumable(player));
-                instance.consumeResource(context, consumables.get(instance.getResource().key()));
-            }
-
-            for (SkillResource.DelayConsumable consumable : consumables.values()) {
-                if (!consumable.canConsume()) return false;
-            }
-
-            for (SkillResource.DelayConsumable consumable : consumables.values()) {
-                consumable.apply();
-            }
-        }
-
-        for (ISkillInstance<T> instance : skills) {
-            instance.release(context);
-        }
-
-        return true;
-    }
-
-    /**
      * Releases all skills of the specified type, creating each instance's context from the environment.
      * 释放指定类型的所有技能，从环境为每个实例创建上下文。
      * <p>
-     * Unlike {@link #releaseSkills(SkillType, SkillContext)}, which uses a single pre-built context
-     * for every instance, this overload creates a dedicated context for each skill instance via its
-     * own {@link SkillContextFactory}, using the instance's data to fill the context
+     * A dedicated context is created for each skill instance via its own
+     * {@link SkillContextFactory}, using the instance's data to fill the context
      * (see {@link SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)}).
-     * This is the preferred entry point when no context has been built yet, such as when
-     * reacting to a trigger event.
-     * 与{@link #releaseSkills(SkillType, SkillContext)}为所有实例使用单个预构建上下文不同，
-     * 此重载通过每个技能实例自己的 {@link SkillContextFactory} 为其创建专用上下文，
+     * This is the entry point used by {@link com.leaf.skiller.util.SkillReleaser}
+     * when reacting to a trigger event.
+     * 通过每个技能实例自己的 {@link SkillContextFactory} 为其创建专用上下文，
      * 使用实例的数据填充上下文
      * （见 {@link SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)}）。
-     * 当尚未构建上下文时（例如响应触发事件时），这是首选的入口点。
+     * 这是 {@link com.leaf.skiller.util.SkillReleaser} 响应触发事件时使用的入口点。
      * </p>
      * <p>
      * The resource handling follows the same all-or-nothing strategy: all required resources
@@ -267,7 +208,6 @@ public class SkillBundle implements OwnedBySkills {
      *         如果资源不足则返回 false
      * @throws ClassCastException If a context created by a factory is incompatible with its skill
      *                            如果工厂创建的上下文与其技能不兼容
-     * @see #releaseSkills(SkillType, SkillContext)
      * @see SkillContextEnvironment
      * @see SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)
      * @see ItemSkillRegistration#getFactory()
@@ -275,7 +215,11 @@ public class SkillBundle implements OwnedBySkills {
      */
     @SuppressWarnings("unchecked")
     public boolean releaseSkills(SkillType type, SkillContextEnvironment env) {
-        List<ISkillInstance<SkillContext>> skills = (List<ISkillInstance<SkillContext>>) (List<?>) getSkills(type);
+        // skillData holds the per-type INSTANCE lists; getSkills(type) returns the
+        // REGISTRATION lists (ItemSkillRegistration), which would CCE on iteration.
+        // skillData 保存按类型分组的实例列表；getSkills(type) 返回的是
+        // 注册包装列表（ItemSkillRegistration），迭代时会 CCE。
+        List<ISkillInstance<SkillContext>> skills = (List<ISkillInstance<SkillContext>>) (List<?>) skillData.get(type);
         if (skills == null || skills.isEmpty()) return true;
 
         Player player = env.getPlayer();
@@ -309,6 +253,38 @@ public class SkillBundle implements OwnedBySkills {
             instance.release(contexts.get(instance));
         }
 
+        return true;
+    }
+
+    /**
+     * Releases every skill in this bundle regardless of its type, creating each
+     * instance's context from the environment.
+     * 释放此技能包中的所有技能（无论类型），从环境为每个实例创建上下文。
+     * <p>
+     * This is the entry point for key-binding triggers: a skill key releases
+     * everything bound to it, whatever types those skills have. Each type group
+     * is released through {@link #releaseSkills(SkillType, SkillContextEnvironment)},
+     * so the resource all-or-nothing check and per-instance context creation
+     * behave exactly as with typed releases.
+     * 这是按键绑定触发的入口：一个技能键释放绑定到它的所有技能，
+     * 无论这些技能是什么类型。每个类型组仍通过
+     * {@link #releaseSkills(SkillType, SkillContextEnvironment)} 释放，
+     * 因此资源的全有或全无检查与每实例上下文创建的行为与按类型释放完全一致。
+     * </p>
+     *
+     * @param env The environment providing the player, level, trigger event and
+     *            extra data from which each context is created
+     *            提供玩家、等级、触发事件和额外数据的环境，上下文从中创建
+     * @return true if the release was not blocked by insufficient resources
+     *         如果释放未因资源不足而被阻止则返回 true
+     * @see #releaseSkills(SkillType, SkillContextEnvironment)
+     * @see com.leaf.skiller.content.packet.KeyPressedPacket
+     * @since 1.0.0
+     */
+    public boolean releaseAll(SkillContextEnvironment env) {
+        for (SkillType type : List.copyOf(skillData.keySet())) {
+            releaseSkills(type, env);
+        }
         return true;
     }
 

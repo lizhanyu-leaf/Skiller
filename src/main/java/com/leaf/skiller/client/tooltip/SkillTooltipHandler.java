@@ -94,6 +94,9 @@ public class SkillTooltipHandler {
             // Iterate through all skill bindings and add them to the tooltip
             // 遍历所有技能绑定并将它们添加到工具提示中
             for (int i : component.bindings().keySet()) {
+                // Guard against binding keys outside the registered key array.
+                // 防止绑定键超出已注册按键数组的范围。
+                if (i < 0 || i >= AllKeys.SKILL_KEYS.length) continue;
                 KeyMapping key = AllKeys.SKILL_KEYS[i];
                 for (ISkillInstance<?> skill : component.bindings().get(i).getAllData())
                     event.getToolTip().add(index++,

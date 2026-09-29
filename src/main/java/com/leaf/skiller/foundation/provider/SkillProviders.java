@@ -99,6 +99,11 @@ public class SkillProviders {
      * @since 1.0.0
      */
     public static void register(SkillProvider provider) {
+        // Guard against duplicate registration of the same provider type,
+        // so repeated calls are harmless.
+        // 防止重复注册同一类型的提供者，使重复调用无害化。
+        boolean exists = PROVIDERS.stream().anyMatch(p -> p.getClass() == provider.getClass());
+        if (exists) return;
         PROVIDERS.add(provider);
     }
 

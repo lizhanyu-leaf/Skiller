@@ -1,7 +1,8 @@
 package com.leaf.skiller;
 
 import com.leaf.skiller.content.packet.KeyPressedPacket;
-import com.leaf.skiller.content.packet.SkillTogglePacket;
+import com.leaf.skiller.content.packet.SkillSyncRequestPacket;
+import com.leaf.skiller.content.packet.SyncSkillComponentPacket;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -28,7 +29,8 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
  * @version 1.0.0
  * @see RegisterPayloadHandlersEvent
  * @see KeyPressedPacket
- * @see SkillTogglePacket
+ * @see SyncSkillComponentPacket
+ * @see SkillSyncRequestPacket
  * @since 1.0.0
  */
 @EventBusSubscriber
@@ -65,10 +67,12 @@ public final class AllPackets {
      * Registered packets:
      * 注册的数据包：
      * <ul>
-     * <li>KeyPressedPacket - Sent from client to server when a skill key is pressed
-     * 当按下技能键时从客户端发送到服务器</li>
-     * <li>SkillTogglePacket - Sent from client to server to toggle skill activation state
-     * 从客户端发送到服务器以切换技能激活状态</li>
+     * <li>KeyPressedPacket (client → server) - skill key state changes
+     * 技能键状态变化</li>
+     * <li>SyncSkillComponentPacket (client → server) - merged skill component
+     * 合并后的技能组件</li>
+     * <li>SkillSyncRequestPacket (server → client) - server-driven enable/disable request
+     * 服务端驱动的启用/禁用请求</li>
      * </ul>
      * </p>
      *
@@ -76,7 +80,8 @@ public final class AllPackets {
      *              负载处理器注册事件
      * @see RegisterPayloadHandlersEvent
      * @see KeyPressedPacket
-     * @see SkillTogglePacket
+     * @see SyncSkillComponentPacket
+     * @see SkillSyncRequestPacket
      * @since 1.0.0
      */
     @SubscribeEvent
@@ -88,9 +93,14 @@ public final class AllPackets {
                         KeyPressedPacket::handle
                 )
                 .playToServer(
-                        SkillTogglePacket.TYPE,
-                        SkillTogglePacket.STREAM_CODEC,
-                        SkillTogglePacket::handle
+                        SyncSkillComponentPacket.TYPE,
+                        SyncSkillComponentPacket.STREAM_CODEC,
+                        SyncSkillComponentPacket::handle
+                )
+                .playToClient(
+                        SkillSyncRequestPacket.TYPE,
+                        SkillSyncRequestPacket.STREAM_CODEC,
+                        SkillSyncRequestPacket::handle
                 )
         ;
     }

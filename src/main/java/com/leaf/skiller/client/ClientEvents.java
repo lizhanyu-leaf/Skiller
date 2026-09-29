@@ -1,6 +1,8 @@
 package com.leaf.skiller.client;
 
+import com.leaf.skiller.client.renderer.AllStrategyRenderers;
 import com.leaf.skiller.client.renderer.StrategyRenderers;
+import net.neoforged.api.distmarker.Dist;
 import com.leaf.skiller.client.tooltip.SkillTooltipHandler;
 import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -29,8 +31,15 @@ import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
  * @see StrategyRenderers
  * @since 1.0.0
  */
-@EventBusSubscriber
+@EventBusSubscriber(value = Dist.CLIENT)
 public class ClientEvents {
+
+    static {
+        // Client-only renderer registration; safe here because this class only
+        // loads on the physical client (Dist.CLIENT).
+        // 仅客户端的渲染器注册；此类只在物理客户端加载（Dist.CLIENT），因此安全。
+        AllStrategyRenderers.register();
+    }
 
     /**
      * Event handler for keyboard input events.

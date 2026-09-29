@@ -1,5 +1,6 @@
 package com.leaf.skiller.client.renderer.entity;
 
+import com.leaf.skiller.client.ClientSkillCache;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.renderer.StrategyRenderer;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
@@ -81,6 +82,12 @@ public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
     public Optional<SkillContext> getContext(Minecraft mc, net.minecraft.client.multiplayer.ClientLevel level,
                                   net.minecraft.world.entity.player.Player player,
                                   ISkillInstance<SkillContext> instance) {
+        // Preview gate: only render while a skill key bound to this instance is
+        // held, so right-click (or other) triggers never show the outline.
+        // 预览门控：仅当绑定到此实例的技能键被按住时才渲染，
+        // 右键（或其他）触发不会显示轮廓。
+        if (!ClientSkillCache.isInstanceKeyPressed(instance)) return Optional.empty();
+
         var context = instance.skill().getFactory()
                 .create(SkillContextEnvironment.noEvent(player, level), instance);
         return Optional.ofNullable(context);
@@ -125,10 +132,17 @@ public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
         var level = mc.level;
         if (level == null) return;
 
+        // Drop flags of removed entities so the set cannot grow without bound.
+        // 清除已消亡实体的标记，防止集合无限增长。
+        glowingEntities.removeIf(Entity::isRemoved);
+
         // Check if you should render and calculate entities
         // 检查是否应该渲染并计算实体
         var skill = instance.skill().getSkill();
         if (!(skill instanceof StrategySkill<?,?> strategySkill)) return;
+        // Only entity strategies can be rendered by this renderer.
+        // 只有实体策略才能由该渲染器渲染。
+        if (!(strategySkill.strategy() instanceof EntityStrategy)) return;
         var strategy = (EntityStrategy<SkillContext>) strategySkill.strategy();
 
         if (!strategy.canCollect(context, instance)) return;
@@ -158,14 +172,11 @@ public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
 
             poseStack.pushPose();
 
-            // Position transformation
-            // 位置变换
-            poseStack.translate(
-                    entity.getX(),
-                    entity.getY(),
-                    entity.getZ()
-            );
-
+            // NOTE: no translate here. renderEntity() already converts to
+            // camera-relative interpolated coordinates; translating by the
+            // absolute world position here would offset the outline twice.
+            // 注意：这里不要 translate。renderEntity() 已完成相机相对的插值坐标换算，
+            // 若再用绝对世界坐标平移会导致轮廓被偏移两次。
             // Mark entity as glowing
             // 标记实体为发光
             glowingEntities.add(entity);
@@ -209,12 +220,12 @@ public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
      * 实体轮廓通常在半透明块之后渲染，以确保它们在其他世界元素之上可见。
      * </p>
      *
-     * @return AFTER_TRANSLUCENT_BLOCKS render stage
-     *         AFTER_TRANSLUCENT_BLOCKS 渲染阶段
+     * @return AFTER_ENTITIES render stage
+     *         AFTER_ENTITIES 渲染阶段
      * @since 1.0.0
      */
     @Override
     public RenderLevelStageEvent.Stage getStage() {
-        return RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS;
+        return RenderLevelStageEvent.Stage.AFTER_ENTITIES;
     }
 }

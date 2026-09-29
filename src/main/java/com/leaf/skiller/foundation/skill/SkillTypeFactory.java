@@ -125,5 +125,31 @@ public class SkillTypeFactory {
         public int hashCode() {
             return id.hashCode();
         }
+
+        /**
+         * Compares based on the resource location ID, consistent with hashCode.
+         * ID-based equality keeps instances from different sources (not obtained
+         * through {@link SkillTypeFactory#of(ResourceLocation)}) interchangeable
+         * as map keys.
+         * 基于资源位置ID进行比较，与 hashCode 保持一致。
+         * 基于ID的相等性使来自不同来源（未经 {@link SkillTypeFactory#of(ResourceLocation)} 获取）
+         * 的实例可以互换地用作映射键。
+         *
+         * @param obj the object to compare with / 要比较的对象
+         * @return true if the other object is a HashSkillType with the same ID
+         *         如果对方是具有相同ID的 HashSkillType 则返回 true
+         * @since 1.0.0
+         */
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof HashSkillType that && id.equals(that.id);
+        }
+
+        @Override
+        public String toString() {
+            return "HashSkillType{" +
+                    "id=" + id +
+                    '}';
+        }
     }
 }

@@ -1,6 +1,11 @@
 package com.leaf.skiller.server;
 
+import com.leaf.skiller.AllSkillTypes;
+import com.leaf.skiller.content.packet.SkillSyncRequestPacket;
+import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
+import com.leaf.skiller.util.SkillReleaser;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -90,6 +95,45 @@ public class PlayerPressedKeys {
             keys.add(keyIndex);
         } else {
             keys.remove(keyIndex);
+        }
+
+        // Automatic enable/disable timing: any held skill key enables the skill
+        // system, no held skill key disables it. On enable only a placeholder is
+        // stored; the actual component arrives via SyncSkillComponentPacket once
+        // the client answers the sync request. The key states themselves are NOT
+        // cleared here — they track real input regardless of the toggle.
+        // 自动的启用/禁用时机：任意技能键被按住即启用技能系统，
+        // 没有任何技能键被按住即禁用。启用时仅存储占位数据；
+        // 客户端响应同步请求后，真正的组件通过 SyncSkillComponentPacket 到达。
+        // 此处不清除按键状态——无论开关如何，它们始终跟踪真实输入。
+        if (!keys.isEmpty() && !ServerSkillCache.isEnableSkill(player)) {
+            ServerSkillCache.onToggle(player, true);
+            PacketDistributor.sendToPlayer(player, new SkillSyncRequestPacket(true));
+        } else if (keys.isEmpty() && ServerSkillCache.isEnableSkill(player)) {
+            ServerSkillCache.onToggle(player, false);
+            PacketDistributor.sendToPlayer(player, new SkillSyncRequestPacket(false));
+        }
+
+        // Key-down edge trigger: release all KEY_PRESSED skills once per press
+        // through the unified SkillReleaser. The release needs the real synced
+        // component, so during the enabling round-trip the callback parks in
+        // ServerSkillCache and runs when the sync arrives — the lambda re-checks
+        // that the key is still held, so a tap that ends before the sync is
+        // dropped. The pressed index is passed as extra data so context
+        // factories can read which key triggered the release.
+        // 按下沿触发：每次按下通过统一的 SkillReleaser 释放所有 KEY_PRESSED 技能。
+        // 释放依赖真实同步的组件，因此在启用往返期间回调会挂在
+        // ServerSkillCache 中，同步到达时执行——lambda 会重新检查按键是否仍被
+        // 按住，同步前就松开的敲击会被丢弃。
+        // 按下的按键索引作为额外数据传入，上下文工厂可据此得知触发按键。
+        if (pressed && ServerSkillCache.isEnableSkill(player)) {
+            ServerSkillCache.onSynced(player, () -> {
+                if (!PlayerPressedKeys.isPressed(player, keyIndex)) return;
+                new SkillReleaser(player).release(
+                        AllSkillTypes.KEY_PRESSED,
+                        SkillContextEnvironment.noEvent(player, player.level())
+                                .extraData("key_index", keyIndex));
+            });
         }
     }
 

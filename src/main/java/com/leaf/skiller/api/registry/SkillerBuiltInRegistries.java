@@ -111,41 +111,6 @@ public class SkillerBuiltInRegistries {
     }
 
     /**
-     * Creates a simple registry with a custom freeze callback but no intrusive holders.
- * 创建一个带有自定义冻结回调但没有侵入式持有者的简单注册表。
-     *
-     * <p>The freeze callback is invoked when the registry is frozen during game initialization.
-     * 冻结回调在游戏初始化期间注册表被冻结时被调用。
-     *
-     * @param <T> the type of registry entries / 注册表条目的类型
-     * @param key the registry key identifying this registry / 识别此注册表的注册表键
-     * @param onBakeCallback the callback to run when the registry is baked/frozen / 注册表被烘焙/冻结时运行的回调
-     * @return the created registry / 创建的注册表
-     * @see #register(ResourceKey, boolean, Runnable)
-     * @since 1.0.0
-     */
-    private static <T> Registry<T> simpleWithFreezeCallback(ResourceKey<Registry<T>> key, Runnable onBakeCallback) {
-        return register(key, false, onBakeCallback);
-    }
-
-    /**
-     * Creates a registry with intrusive holders enabled, allowing reference to entries before registration.
- * 创建一个启用了侵入式持有者的注册表，允许在注册之前引用条目。
-     *
-     * <p>Intrusive holders are useful for registries where entries need to reference each other.
-     * 侵入式持有者对于条目需要相互引用的注册表很有用。
-     *
-     * @param <T> the type of registry entries / 注册表条目的类型
-     * @param key the registry key identifying this registry / 识别此注册表的注册表键
-     * @return the created registry / 创建的注册表
-     * @see #register(ResourceKey, boolean, Runnable)
-     * @since 1.0.0
-     */
-    private static <T> Registry<T> withIntrusiveHolders(ResourceKey<Registry<T>> key) {
-        return register(key, true, () -> {});
-    }
-
-    /**
      * Creates and registers a custom registry with the specified configuration.
  * 使用指定的配置创建和注册自定义注册表。
      *

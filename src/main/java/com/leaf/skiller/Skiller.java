@@ -100,6 +100,13 @@ public class Skiller {
      */
     public Skiller(IEventBus modEventBus, ModContainer modContainer) {
         AllDataComponents.register(modEventBus);
+        // Register skill providers here, NOT inside onRegister(RegisterEvent):
+        // RegisterEvent fires once per registry in the game, so registering there
+        // would add the same provider hundreds of times.
+        // 在这里注册技能提供者，而不是在 onRegister(RegisterEvent) 中：
+        // RegisterEvent 会为游戏中每个注册表各触发一次，
+        // 在那里注册会把同一个提供者重复添加数百次。
+        AllSkillProviders.register();
 
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(Skiller::onRegister);
@@ -125,9 +132,13 @@ public class Skiller {
      * @since 1.0.0
      */
     public static void onRegister(final RegisterEvent event) {
+        // Only registry-backed content is registered here; the static initializers
+        // of these classes run on first access, while the registries are writable.
+        // 这里只注册注册表内容；这些类的静态初始化块在首次访问时运行，
+        // 此时注册表仍处于可写状态。
         AllSkillInstanceFactories.register();
         AllSkillResources.register();
-        AllSkillProviders.register();
+        AllSkills.register();
     }
 
     /**

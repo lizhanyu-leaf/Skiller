@@ -1,11 +1,10 @@
 package com.leaf.skiller.server;
 
 import com.leaf.skiller.AllSkillTypes;
-import com.leaf.skiller.content.packet.SkillSyncRequestPacket;
 import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
 import com.leaf.skiller.util.SkillReleaser;
+import com.lowdragmc.lowdraglib2.networking.rpc.RPCPacketDistributor;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -32,7 +31,6 @@ import java.util.*;
  * 相同的按键索引应在客户端和服务端之间保持一致。
  *
  * @see ServerSkillCache
- * @see com.leaf.skiller.content.packet.KeyPressedPacket
  * @see com.leaf.skiller.client.ClientEvents
  * @since 1.0.0
  */
@@ -108,10 +106,10 @@ public class PlayerPressedKeys {
         // 此处不清除按键状态——无论开关如何，它们始终跟踪真实输入。
         if (!keys.isEmpty() && !ServerSkillCache.isEnableSkill(player)) {
             ServerSkillCache.onToggle(player, true);
-            PacketDistributor.sendToPlayer(player, new SkillSyncRequestPacket(true));
+            RPCPacketDistributor.rpcToPlayer(player, "skillerSyncRequest", true);
         } else if (keys.isEmpty() && ServerSkillCache.isEnableSkill(player)) {
             ServerSkillCache.onToggle(player, false);
-            PacketDistributor.sendToPlayer(player, new SkillSyncRequestPacket(false));
+            RPCPacketDistributor.rpcToPlayer(player, "skillerSyncRequest", false);
         }
 
         // Key-down edge trigger: release all KEY_PRESSED skills once per press

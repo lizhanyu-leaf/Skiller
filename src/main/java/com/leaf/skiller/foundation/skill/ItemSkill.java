@@ -1,9 +1,7 @@
 package com.leaf.skiller.foundation.skill;
 
-import com.leaf.skiller.api.registry.SkillerBuiltInRegistries;
 import com.leaf.skiller.foundation.Consumable;
 import com.leaf.skiller.foundation.context.SkillContext;
-import net.minecraft.resources.ResourceLocation;
 
 /**
  * Represents an item-based skill that can be released and consumes resources.

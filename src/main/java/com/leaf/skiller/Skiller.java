@@ -1,5 +1,6 @@
 package com.leaf.skiller;
 
+import com.leaf.skiller.networks.SkillComponentNetworks;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;

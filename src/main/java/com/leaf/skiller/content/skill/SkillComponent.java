@@ -1,14 +1,19 @@
 package com.leaf.skiller.content.skill;
 
 import com.leaf.skiller.foundation.skill.ISkillInstance;
+import com.leaf.skiller.foundation.skill.ItemSkill;
 import com.leaf.skiller.foundation.skill.SkillBundle;
+import com.lowdragmc.lowdraglib2.syncdata.IPersistedSerializable;
+import com.lowdragmc.lowdraglib2.syncdata.annotation.Persisted;
+import com.lowdragmc.lowdraglib2.utils.PersistedParser;
 import com.mojang.serialization.Codec;
-import net.minecraft.network.RegistryFriendlyByteBuf;
+import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -27,69 +32,14 @@ import java.util.stream.Collectors;
  * 实现与 Minecraft 数据系统的无缝集成。
  * </p>
  *
- * @param bindings The internal map of skill bindings, mapping integer keys to skill bundles.
- *                 技能绑定的内部映射，将整数键映射到技能束。
- *                 <p>
- *                 Each key typically represents a slot ID or skill identifier, with the associated
- *                 SkillBundle containing the skill instance and related data.
- *                 每个键通常代表槽位 ID 或技能标识符，关联的 SkillBundle 包含技能实例和相关数据。
- *                 </p>
  * @see SkillBundle
- * @see com.leaf.skiller.foundation.skill.ItemSkill
+ * @see ItemSkill
  * @since 1.0.0
  */
-public record SkillComponent(Map<Integer, SkillBundle> bindings) {
-    /**
-     * Codec for serializing and deserializing SkillComponent objects.
-     * 用于序列化和反序列化 SkillComponent 对象的编解码器。
-     * <p>
-     * This codec handles conversion between SkillComponent and a map representation,
-     * using string keys during serialization for compatibility with JSON format.
-     * 该编解码器处理 SkillComponent 与映射表示之间的转换，在序列化期间使用字符串键以兼容 JSON 格式。
-     * </p>
-     */
-    public static final Codec<SkillComponent> CODEC = Codec.unboundedMap(
-            Codec.STRING, SkillBundle.CODEC
-    ).xmap(
-            map -> new SkillComponent(
-                    map.entrySet().stream().collect(Collectors.toMap(
-                            e -> Integer.parseInt(e.getKey()), Map.Entry::getValue
-                    ))
-            ),
-            component -> component.bindings.entrySet().stream().collect(Collectors.toMap(
-                    e -> String.valueOf(e.getKey()), Map.Entry::getValue
-            ))
-    );
+public final class SkillComponent implements IPersistedSerializable {
 
-    /**
-     * Stream codec for network serialization of SkillComponent objects.
-     * 用于 SkillComponent 对象网络序列化的流编解码器。
-     * <p>
-     * This codec enables efficient binary serialization for network packet transmission,
-     * writing the size of bindings followed by each key-value pair.
-     * 该编解码器实现高效的二进制序列化用于网络数据包传输，写入绑定大小后跟每个键值对。
-     * </p>
-     */
-    public static final StreamCodec<RegistryFriendlyByteBuf, SkillComponent> STREAM_CODEC =
-            StreamCodec.of(
-                    (buf, component) -> {
-                        buf.writeVarInt(component.bindings.size());
-                        for (var entry : component.bindings.entrySet()) {
-                            buf.writeVarInt(entry.getKey());
-                            SkillBundle.STREAM_CODEC.encode(buf, entry.getValue());
-                        }
-                    },
-                    buf -> {
-                        int size = buf.readVarInt();
-                        Map<Integer, SkillBundle> bindings = new HashMap<>();
-                        for (int i = 0; i < size; i++) {
-                            int key = buf.readVarInt();
-                            SkillBundle bundle = SkillBundle.STREAM_CODEC.decode(buf);
-                            bindings.put(key, bundle);
-                        }
-                        return new SkillComponent(bindings);
-                    }
-            );
+    @Persisted
+    private Map<Integer, SkillBundle> bindings;
 
     /**
      * Constructs a new SkillComponent with the specified bindings.
@@ -106,7 +56,41 @@ public record SkillComponent(Map<Integer, SkillBundle> bindings) {
      *                              如果绑定为 null 则抛出异常
      * @since 1.0.0
      */
-    public SkillComponent {}
+    public SkillComponent(Map<Integer, SkillBundle> bindings) {
+        this.bindings = bindings;
+    }
+
+    public SkillComponent copy() {
+        return new SkillComponent(new HashMap<>(bindings));
+    }
+
+    private SkillComponent() {
+        this.bindings = new HashMap<>();
+    }
+
+    /**
+     * Codec for serializing and deserializing SkillComponent objects.
+     * 用于序列化和反序列化 SkillComponent 对象的编解码器。
+     * <p>
+     * This codec handles conversion between SkillComponent and a map representation,
+     * using string keys during serialization for compatibility with JSON format.
+     * 该编解码器处理 SkillComponent 与映射表示之间的转换，在序列化期间使用字符串键以兼容 JSON 格式。
+     * </p>
+     */
+    public static final Codec<SkillComponent> CODEC
+            = PersistedParser.createCodec(SkillComponent::new);
+
+    /**
+     * Stream codec for network serialization of SkillComponent objects.
+     * 用于 SkillComponent 对象网络序列化的流编解码器。
+     * <p>
+     * This codec enables efficient binary serialization for network packet transmission,
+     * writing the size of bindings followed by each key-value pair.
+     * 该编解码器实现高效的二进制序列化用于网络数据包传输，写入绑定大小后跟每个键值对。
+     * </p>
+     */
+    public static final StreamCodec<ByteBuf, SkillComponent> STREAM_CODEC =
+            PersistedParser.createStreamCodec(SkillComponent::new);
 
     /**
      * Empty skill component constant representing no skill bindings.
@@ -134,7 +118,6 @@ public record SkillComponent(Map<Integer, SkillBundle> bindings) {
      * 整数键到技能束的映射
      * @since 1.0.0
      */
-    @Override
     public Map<Integer, SkillBundle> bindings() {
         return bindings;
     }
@@ -159,4 +142,24 @@ public record SkillComponent(Map<Integer, SkillBundle> bindings) {
                 .flatMap(bundle -> bundle.getAllData().stream())
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) return true;
+        if (obj == null || obj.getClass() != this.getClass()) return false;
+        var that = (SkillComponent) obj;
+        return Objects.equals(this.bindings, that.bindings);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(bindings);
+    }
+
+    @Override
+    public String toString() {
+        return "SkillComponent[" +
+                "bindings=" + bindings + ']';
+    }
+
 }

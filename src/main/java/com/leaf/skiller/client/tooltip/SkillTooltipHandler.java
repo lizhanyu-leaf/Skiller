@@ -2,6 +2,7 @@ package com.leaf.skiller.client.tooltip;
 
 import com.leaf.skiller.AllDataComponents;
 import com.leaf.skiller.AllKeys;
+import com.leaf.skiller.Skiller;
 import com.leaf.skiller.content.skill.SkillComponent;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import net.minecraft.ChatFormatting;
@@ -90,7 +91,8 @@ public class SkillTooltipHandler {
                     1,
                     Component.translatable("tooltip.skiller.skill")
             );
-            int index = 1;
+
+            int index = 2;
             // Iterate through all skill bindings and add them to the tooltip
             // 遍历所有技能绑定并将它们添加到工具提示中
             for (int i : component.bindings().keySet()) {
@@ -99,8 +101,8 @@ public class SkillTooltipHandler {
                 if (i < 0 || i >= AllKeys.SKILL_KEYS.length) continue;
                 KeyMapping key = AllKeys.SKILL_KEYS[i];
                 for (ISkillInstance<?> skill : component.bindings().get(i).getAllData())
-                    event.getToolTip().add(index++,
-                            fromSkill(key.getTranslatedKeyMessage(), skill));
+                    event.getToolTip().add(index, fromSkill(key.getTranslatedKeyMessage(), skill));
+                index++;
             }
         }
     }

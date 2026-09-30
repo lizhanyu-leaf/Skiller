@@ -2,13 +2,11 @@ package com.leaf.skiller.client;
 
 import com.leaf.skiller.AllKeys;
 import com.leaf.skiller.client.renderer.StrategyRenderers;
-import com.leaf.skiller.content.packet.KeyPressedPacket;
-import com.leaf.skiller.content.packet.SyncSkillComponentPacket;
 import com.leaf.skiller.content.skill.SkillComponent;
 import com.leaf.skiller.foundation.provider.SkillProviders;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
+import com.lowdragmc.lowdraglib2.networking.rpc.RPCPacketDistributor;
 import net.minecraft.client.Minecraft;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,7 +15,7 @@ import java.util.Map;
  * Client-side cache for managing skill system state and key bindings.
  * 客户端缓存，用于管理系统技能状态和按键绑定。
  * <p>
- * The skill system's enable/disable timing is decided by the SERVER: any held
+ * The skill systems enable/disable timing is decided by the SERVER: any held
  * skill key enables it, no held skill key disables it. This class therefore has
  * two always-on duties plus two server-driven transitions:
  * 技能系统的启用/禁用时机由服务端决定：任意技能键被按住即启用，
@@ -29,16 +27,14 @@ import java.util.Map;
  * <li>Always track the pressed state for client-side preview gating.
  * 始终跟踪按键按下状态，供客户端预览渲染的门控使用。</li>
  * <li>On a sync request (enable): collect skills, schedule renderers, and
- * answer with {@link SyncSkillComponentPacket} — the client is the single
+ * answer with skillerSyncSkillComponent — the client is the single
  * source of truth for skill data.
  * 收到同步请求（启用）时：收集技能、调度渲染，并以
- * {@link SyncSkillComponentPacket} 应答——客户端是技能数据的唯一事实来源。</li>
+ * skillerSyncSkillComponent 应答——客户端是技能数据的唯一事实来源。</li>
  * <li>On a sync request (disable): clear the local cache and rendering.
  * 收到同步请求（禁用）时：清理本地缓存和渲染。</li>
  * </ul>
  *
- * @see com.leaf.skiller.content.packet.SkillSyncRequestPacket
- * @see KeyPressedPacket
  * @see com.leaf.skiller.server.PlayerPressedKeys
  * @since 1.0.0
  */
@@ -147,7 +143,6 @@ public class ClientSkillCache {
      * 只发送状态<em>变化</em>，因此按下沿和松开沿都恰好到达服务端一次。
      * </p>
      *
-     * @see KeyPressedPacket
      * @see com.leaf.skiller.server.PlayerPressedKeys#setKeyPressed
      * @since 1.0.0
      */
@@ -164,7 +159,7 @@ public class ClientSkillCache {
             boolean previous = pressed.getOrDefault(idx, false);
             if (previous != state) {
                 pressed.put(idx, state);
-                PacketDistributor.sendToServer(new KeyPressedPacket(idx, state));
+                RPCPacketDistributor.rpcToServer("skillerKeyPressed", idx, state);
             }
         }
     }
@@ -175,10 +170,10 @@ public class ClientSkillCache {
      * <p>
      * On enable: collects the player's skills locally (the client is the single
      * source of truth), schedules strategy rendering, and answers the server
-     * with {@link SyncSkillComponentPacket} so the server stores exactly what
+     * with skillerSyncSkillComponent so the server stores exactly what
      * the client collected. On disable: clears the local cache and rendering.
      * 启用时：在本地收集玩家技能（客户端是唯一事实来源）、
-     * 调度策略渲染，并以 {@link SyncSkillComponentPacket} 应答服务端，
+     * 调度策略渲染，并以 skillerSyncSkillComponent 应答服务端，
      * 使服务端存储的正是客户端收集的数据。禁用时：清理本地缓存和渲染。
      * </p>
      * <p>
@@ -193,7 +188,6 @@ public class ClientSkillCache {
      *                      {@code false} to disable locally
      *                      为 {@code true} 时启用并同步组件，
      *                      为 {@code false} 时本地禁用
-     * @see com.leaf.skiller.content.packet.SkillSyncRequestPacket
      * @see #pressed
      * @since 1.0.0
      */
@@ -211,7 +205,8 @@ public class ClientSkillCache {
             // Answer the server with the merged component; the server only
             // holds a placeholder until this arrives.
             // 将合并后的组件应答给服务端；在此到达之前服务端只有占位数据。
-            PacketDistributor.sendToServer(new SyncSkillComponentPacket(skills));
+            RPCPacketDistributor.rpcToServer(
+                    "skillerSyncSkillComponent", skills);
         } else {
             if (!enable) return;
             enable = false;

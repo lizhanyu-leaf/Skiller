@@ -1,240 +1,247 @@
 package com.leaf.skiller.foundation.skill;
 
+import com.leaf.skiller.api.registry.SkillerBuiltInRegistries;
 import com.leaf.skiller.foundation.OwnedBySkills;
 import com.leaf.skiller.foundation.SkillData;
 import com.leaf.skiller.foundation.SkillResource;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
-import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
+import com.lowdragmc.lowdraglib2.syncdata.IPersistedSerializable;
+import com.lowdragmc.lowdraglib2.syncdata.annotation.Persisted;
+import com.lowdragmc.lowdraglib2.utils.PersistedParser;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
-import net.minecraft.network.RegistryFriendlyByteBuf;
+import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * A container that bundles multiple skills together for management and execution.
- * 技能容器，将多个技能捆绑在一起进行管理和执行
+ * 技能容器，将多个技能捆绑在一起进行管理和执行。
  * <p>
- * SkillBundle provides a centralized way to manage multiple skills of different types,
- * supporting serialization, network transmission, and resource consumption.
- * SkillBundle 提供了一种集中管理多种不同类型技能的方式，支持序列化、网络传输和资源消耗
+ * 支持序列化、网络传输和资源消耗。
+ * </p>
+ * <p>
+ * <b>数据与缓存：</b>{@code skills}（{@link SkillData} 列表）是唯一的序列化数据源；
+ * {@code skillRegistry}/{@code skillData} 是按类型分组的运行时缓存。
+ * 缓存使用<b>脏标记</b>管理：任何受控的修改方法（{@link #addSkillData}、
+ * {@link #removeSkillData}、{@link #clearSkillData}、覆写的 removeSkill 等）
+ * 只标记缓存失效，真正的重建推迟到下一次查询（{@link #ensureCache()}），
+ * 因此连续多次修改只重建一次。
+ * </p>
+ * <p>
+ * <b>不要绕过受控方法修改数据</b>：{@link #getDataList()} 返回不可修改视图；
+ * 覆写的 {@link #addSkill(ItemSkillRegistration)} 不受支持（构造默认实例需要环境），
+ * 修改请优先使用实例路径（见 {@code SkillerCommands#bindDustSweep}）。
  * </p>
  *
  * @see OwnedBySkills
- * @see SkillType
- * @see ItemSkill
+ * @see SkillData
  * @see ISkillInstance
  * @since 1.0.0
  * @author Leaf
  */
-public class SkillBundle implements OwnedBySkills {
-    /**
-     * Codec for serializing and deserializing SkillBundle to/from a list of strings.
-     * 用于将 SkillBundle 与字符串列表之间进行序列化和反序列化的编解码器
-     * <p>
-     * This codec enables saving skills to NBT data and loading them back.
-     * 该编解码器支持将技能保存到 NBT 数据并重新加载
-     * </p>
-     *
-     * @see com.mojang.serialization.Codec
-     * @since 1.0.0
-     */
-    public static final Codec<SkillBundle> CODEC = Codec.list(Codec.STRING).xmap(
-            SkillBundle::fromStrings,
-            bundle -> getStrings(bundle.getAllData())
-    );
+public class SkillBundle implements OwnedBySkills, IPersistedSerializable {
 
-    /**
-     * Stream codec for network transmission of SkillBundle data.
-     * 用于 SkillBundle 数据网络传输的流编解码器
-     * <p>
-     * Enables efficient packet-based transmission over Minecraft's network protocol.
-     * 支持通过 Minecraft 网络协议进行高效的数据包传输
-     * </p>
-     *
-     * @see net.minecraft.network.codec.StreamCodec
-     * @since 1.0.0
-     */
-    public static final StreamCodec<RegistryFriendlyByteBuf, SkillBundle> STREAM_CODEC =
-            StreamCodec.of(
-                    (buf, bundle) -> {
-                        List<String> strings = getStrings(bundle.getAllData());
-                        buf.writeVarInt(strings.size());
-                        strings.forEach(buf::writeUtf);
-                    },
-                    buf -> {
-                        int size = buf.readVarInt();
-                        List<String> strings = new ArrayList<>(size);
-                        for (int i = 0; i < size; i++) {
-                            strings.add(buf.readUtf());
-                        }
-                        return SkillBundle.fromStrings(strings);
-                    }
-            );
+    public static final Codec<SkillBundle> CODEC =
+            PersistedParser.createCodec(SkillBundle::new);
 
-    /**
-     * Map of skill types to their corresponding item skills.
-     * 技能类型到对应物品技能的映射表
-     * <p>
-     * Organizes skills by their type for quick lookup and management.
-     * 按技能类型组织技能，便于快速查找和管理
-     * </p>
-     *
-     * @since 1.0.0
-     */
-    private final Map<SkillType, List<ItemSkillRegistration<?>>> skills;
+    public static final StreamCodec<ByteBuf, SkillBundle> STREAM_CODEC =
+            PersistedParser.createStreamCodec(SkillBundle::new);
 
-    /**
-     * Map of skill types to their corresponding skill instances.
-     * 技能类型到对应技能实例的映射表
-     * <p>
-     * Stores the actual data and state for each skill instance.
-     * 存储每个技能实例的实际数据和状态
-     * </p>
-     *
-     * @since 1.0.0
-     */
-    private final Map<SkillType, List<ISkillInstance<?>>> skillData;
+    /** 唯一序列化字段：所有技能的 SkillData（数据事实来源） */
+    @Persisted
+    private List<SkillData> skills = new ArrayList<>();
 
-    /**
-     * Empty skill bundle constant representing no skills.
-     * 表示无技能的空技能包常量
-     * <p>
-     * Use this constant when you need an empty bundle instead of creating a new instance.
-     * 当需要空技能包时使用此常量，而不是创建新实例
-     * </p>
-     *
-     * @since 1.0.0
-     */
+    // ========== 运行时缓存（不序列化，脏标记管理） ==========
+
+    private transient Map<SkillType, List<ItemSkillRegistration<?>>> skillRegistry;
+    private transient Map<SkillType, List<ISkillInstance<?>>> skillData;
+    /** 缓存失效标记：初始为脏，保证反序列化后的首次查询一定重建 */
+    private transient boolean cacheDirty = true;
+
     public static final SkillBundle EMPTY = new SkillBundle();
 
+    public SkillBundle() {}
+
     /**
-     * Default constructor creating an empty skill bundle.
-     * 默认构造器，创建一个空的技能包
-     * <p>
-     * Creates a bundle with no skills. Use this when initializing without any skill data.
-     * 创建一个不包含任何技能的技能包。在不需要任何技能数据初始化时使用
-     * </p>
-     *
-     * @since 1.0.0
+     * 拷贝构造：仅复制序列化数据源并标记缓存待重建。
+     * 实例缓存不共享——重建成本低且能避免脏状态被复制。
      */
-    public SkillBundle() {
-        this.skills = Collections.emptyMap();
-        this.skillData = Collections.emptyMap();
+    public SkillBundle(SkillBundle other) {
+        this.skills = new ArrayList<>(other.skills);
     }
 
     /**
-     * Constructor creating a skill bundle from a list of skill instances.
-     * 从技能实例列表创建技能包的构造器
-     * <p>
-     * Groups the provided skill instances by their skill type for organized management.
-     * 将提供的技能实例按其技能类型分组，以便组织管理
-     * </p>
-     *
-     * @param skills List of skill instances to include in this bundle, or null/empty for empty bundle
-     *               要包含在此技能包中的技能实例列表，传入 null 或空列表将创建空技能包
-     * @throws ClassCastException If skill instances have incompatible types
-     *                             如果技能实例具有不兼容的类型
-     * @see ISkillInstance
-     * @see SkillType
-     * @since 1.0.0
+     * 从实例列表构造：立即转换为 SkillData 并构建缓存（无需等查询）。
      */
-    public SkillBundle(List<ISkillInstance<?>> skills) {
-        if (skills == null || skills.isEmpty()) {
-            this.skills = Collections.emptyMap();
-            this.skillData = Collections.emptyMap();
-        } else {
-            var pair = groupSkills(skills);
-            this.skills  = pair.getFirst();
-            this.skillData = pair.getSecond();
+    public SkillBundle(List<ISkillInstance<?>> instances) {
+        if (instances == null || instances.isEmpty()) return;
+
+        this.skills = instances.stream()
+                .map(ISkillInstance::toData)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        rebuildCache();
+    }
+
+    // ========== 缓存管理（脏标记） ==========
+
+    /**
+     * 从 skills 列表还原运行时缓存，并清除脏标记。
+     */
+    private void rebuildCache() {
+        List<ISkillInstance<?>> instances = new ArrayList<>();
+        for (SkillData data : skills) {
+            ISkillInstance<?> instance = ISkillInstance.fromData(data);
+            if (instance != null) instances.add(instance);
+        }
+
+        var pair = groupSkills(instances);
+        this.skillRegistry = pair.getFirst();
+        this.skillData = pair.getSecond();
+        this.cacheDirty = false;
+    }
+
+    /**
+     * 查询前的缓存保证：仅在脏标记置位时重建，
+     * 因此连续多次修改只触发一次重建。
+     */
+    private void ensureCache() {
+        if (cacheDirty) {
+            rebuildCache();
+        }
+    }
+
+    /** 标记缓存失效；真正的重建推迟到下一次查询 */
+    private void markCacheDirty() {
+        cacheDirty = true;
+    }
+
+    // ========== 受控修改 API（全部标记缓存失效） ==========
+
+    /**
+     * 追加一条技能数据并使缓存失效。
+     */
+    public void addSkillData(SkillData data) {
+        if (data == null) return;
+        skills.add(data);
+        markCacheDirty();
+    }
+
+    /**
+     * 移除一条技能数据并使缓存失效。
+     *
+     * @return true if the data was present and removed / 存在且已移除时返回 true
+     */
+    public boolean removeSkillData(SkillData data) {
+        boolean removed = skills.remove(data);
+        if (removed) markCacheDirty();
+        return removed;
+    }
+
+    /**
+     * 清空所有技能数据并使缓存失效。
+     */
+    public void clearSkillData() {
+        if (!skills.isEmpty()) {
+            skills.clear();
+            markCacheDirty();
         }
     }
 
     /**
-     * Returns a map of skill types to their corresponding item skills.
-     * 返回技能类型到对应物品技能的映射表
-     * <p>
-     * This method is part of the OwnedBySkills interface implementation.
-     * 此方法是 OwnedBySkills 接口实现的一部分
-     * </p>
-     *
-     * @return Unmodifiable map of skill types to lists of item skills
-     *         技能类型到物品技能列表的不可修改映射表
-     * @see OwnedBySkills#skills()
-     * @see SkillType
-     * @see ItemSkill
-     * @since 1.0.0
+     * 返回序列化数据的不可修改视图。
+     * <p>修改必须走 {@link #addSkillData} 等受控方法，否则缓存不会失效。</p>
+     */
+    public List<SkillData> getDataList() {
+        return Collections.unmodifiableList(skills);
+    }
+
+    // ========== OwnedBySkills ==========
+
+    /**
+     * {@inheritDoc}
+     * <p>返回按类型分组的运行时缓存（查询时按需重建）。</p>
      */
     @Override
     public Map<SkillType, List<ItemSkillRegistration<?>>> skills() {
-        return skills;
+        ensureCache();
+        return skillRegistry;
     }
 
     /**
-     * Releases all skills of the specified type, creating each instance's context from the environment.
-     * 释放指定类型的所有技能，从环境为每个实例创建上下文。
-     * <p>
-     * A dedicated context is created for each skill instance via its own
-     * {@link SkillContextFactory}, using the instance's data to fill the context
-     * (see {@link SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)}).
-     * This is the entry point used by {@link com.leaf.skiller.util.SkillReleaser}
-     * when reacting to a trigger event.
-     * 通过每个技能实例自己的 {@link SkillContextFactory} 为其创建专用上下文，
-     * 使用实例的数据填充上下文
-     * （见 {@link SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)}）。
-     * 这是 {@link com.leaf.skiller.util.SkillReleaser} 响应触发事件时使用的入口点。
-     * </p>
-     * <p>
-     * The resource handling follows the same all-or-nothing strategy: all required resources
-     * are collected and checked before any is consumed, and in creative mode resources are
-     * not consumed at all.
-     * 资源处理遵循相同的全有或全无策略：在消耗之前收集并检查所有所需资源，
-     * 并且在创造模式下完全不消耗资源。
-     * </p>
-     *
-     * @param type The skill type to release
-     *             要释放的技能类型
-     * @param env The environment providing the player, level, trigger event and extra data
-     *            from which each context is created
-     *            提供玩家、等级、触发事件和额外数据的环境，上下文从中创建
-     * @return true if skills were successfully released (or none of this type exist),
-     *         false if resources were insufficient
-     *         如果技能成功释放（或该类型不存在任何技能）则返回 true，
-     *         如果资源不足则返回 false
-     * @throws ClassCastException If a context created by a factory is incompatible with its skill
-     *                            如果工厂创建的上下文与其技能不兼容
-     * @see SkillContextEnvironment
-     * @see SkillContextFactory#create(SkillContextEnvironment, ISkillInstance)
-     * @see ItemSkillRegistration#getFactory()
-     * @since 1.0.0
+     * {@inheritDoc}
+     * <p>按注册表类型过滤序列化数据源并使缓存失效，
+     * 而不是使用直接修改缓存的接口默认实现（那会与数据源脱节）。</p>
      */
+    @Override
+    public OwnedBySkills removeSkill(SkillType type) {
+        boolean removed = skills.removeIf(data -> hasType(data, type));
+        if (removed) markCacheDirty();
+        return this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>按注册项ID过滤序列化数据源并使缓存失效。</p>
+     */
+    @Override
+    public OwnedBySkills removeSkill(ItemSkillRegistration<?> skill) {
+        ResourceLocation id = SkillerBuiltInRegistries.SKILLS.getKey(skill);
+        if (id == null) return this;
+        boolean removed = skills.removeIf(data -> id.equals(data.skillId()));
+        if (removed) markCacheDirty();
+        return this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>不受支持：添加注册项需要构造默认实例，而实例的上下文工厂依赖
+     * {@link SkillContextEnvironment}。请经实例路径构造
+     * （如 {@code new SkillBundle(List.of(instance))} 或 {@link #addSkillData}）。</p>
+     */
+    @Override
+    public OwnedBySkills addSkill(ItemSkillRegistration<?> skill) {
+        throw new UnsupportedOperationException(
+                "Adding a registration requires creating a default instance with a "
+                        + SkillContextEnvironment.class.getSimpleName()
+                        + "; build the bundle from instances instead");
+    }
+
+    /**
+     * 判断一条 SkillData 是否属于指定类型（按注册表查询）。
+     */
+    private static boolean hasType(SkillData data, SkillType type) {
+        var registration = SkillerBuiltInRegistries.SKILLS.get(data.skillId());
+        return registration != null && type.equals(registration.getType());
+    }
+
+    // ========== 释放技能 ==========
+
     @SuppressWarnings("unchecked")
     public boolean releaseSkills(SkillType type, SkillContextEnvironment env) {
-        // skillData holds the per-type INSTANCE lists; getSkills(type) returns the
-        // REGISTRATION lists (ItemSkillRegistration), which would CCE on iteration.
-        // skillData 保存按类型分组的实例列表；getSkills(type) 返回的是
-        // 注册包装列表（ItemSkillRegistration），迭代时会 CCE。
-        List<ISkillInstance<SkillContext>> skills = (List<ISkillInstance<SkillContext>>) (List<?>) skillData.get(type);
-        if (skills == null || skills.isEmpty()) return true;
+        ensureCache();
+
+        List<ISkillInstance<SkillContext>> instances =
+                (List<ISkillInstance<SkillContext>>) (List<?>) skillData.get(type);
+        if (instances == null || instances.isEmpty()) return true;
 
         Player player = env.getPlayer();
 
-        // Create a dedicated context per instance via its own factory
-        // 通过每个实例自己的工厂为其创建专用上下文
         Map<ISkillInstance<SkillContext>, SkillContext> contexts = new LinkedHashMap<>();
-        for (ISkillInstance<SkillContext> instance : skills) {
+        for (ISkillInstance<SkillContext> instance : instances) {
             contexts.put(instance, instance.skill().getFactory().create(env, instance));
         }
 
         if (!player.isCreative()) {
-            Map<ResourceKey<SkillResource>, SkillResource.DelayConsumable> consumables =
-                    new HashMap<>();
-            for (ISkillInstance<SkillContext> instance : skills) {
+            Map<ResourceKey<SkillResource>, SkillResource.DelayConsumable> consumables = new HashMap<>();
+            for (ISkillInstance<SkillContext> instance : instances) {
                 consumables.computeIfAbsent(instance.getResource().key(),
                         key -> instance.getResource().getDelayConsumable(player));
                 instance.consumeResource(contexts.get(instance), consumables.get(instance.getResource().key()));
@@ -249,235 +256,67 @@ public class SkillBundle implements OwnedBySkills {
             }
         }
 
-        for (ISkillInstance<SkillContext> instance : skills) {
+        for (ISkillInstance<SkillContext> instance : instances) {
             instance.release(contexts.get(instance));
         }
 
         return true;
     }
 
-    /**
-     * Releases every skill in this bundle regardless of its type, creating each
-     * instance's context from the environment.
-     * 释放此技能包中的所有技能（无论类型），从环境为每个实例创建上下文。
-     * <p>
-     * This is the entry point for key-binding triggers: a skill key releases
-     * everything bound to it, whatever types those skills have. Each type group
-     * is released through {@link #releaseSkills(SkillType, SkillContextEnvironment)},
-     * so the resource all-or-nothing check and per-instance context creation
-     * behave exactly as with typed releases.
-     * 这是按键绑定触发的入口：一个技能键释放绑定到它的所有技能，
-     * 无论这些技能是什么类型。每个类型组仍通过
-     * {@link #releaseSkills(SkillType, SkillContextEnvironment)} 释放，
-     * 因此资源的全有或全无检查与每实例上下文创建的行为与按类型释放完全一致。
-     * </p>
-     *
-     * @param env The environment providing the player, level, trigger event and
-     *            extra data from which each context is created
-     *            提供玩家、等级、触发事件和额外数据的环境，上下文从中创建
-     * @return true if the release was not blocked by insufficient resources
-     *         如果释放未因资源不足而被阻止则返回 true
-     * @see #releaseSkills(SkillType, SkillContextEnvironment)
-     * @see com.leaf.skiller.content.packet.KeyPressedPacket
-     * @since 1.0.0
-     */
     public boolean releaseAll(SkillContextEnvironment env) {
+        ensureCache();
         for (SkillType type : List.copyOf(skillData.keySet())) {
             releaseSkills(type, env);
         }
         return true;
     }
 
+    // ========== 数据访问 ==========
+
     /**
-     * Returns a modifiable list of all skill instances in this bundle.
-     * 返回此技能包中所有技能实例的可修改列表
-     * <p>
-     * This method collects all skill instances across all types into a single list.
-     * The returned list is a new ArrayList and can be safely modified.
-     * 此方法将所有类型的所有技能实例收集到一个列表中。
-     * 返回的列表是一个新的 ArrayList，可以安全地修改
-     * </p>
-     *
-     * @return A modifiable list containing all skill instances, or empty list if none exist
-     *         包含所有技能实例的可修改列表，如果不存在则返回空列表
-     * @see ISkillInstance
-     * @since 1.0.0
+     * 返回全部技能实例（查询时按需重建缓存）。
      */
     public List<ISkillInstance<?>> getAllData() {
-        if (skillData.isEmpty()) {
-            return new ArrayList<>();
-        }
+        ensureCache();
         List<ISkillInstance<?>> all = new ArrayList<>();
         for (List<ISkillInstance<?>> dataList : skillData.values()) {
             all.addAll(dataList);
         }
-        return all;  // 返回可修改的新列表
+        return all;
     }
 
-    // ========== Object 方法重写 ==========
+    // ========== Object 方法 ==========
 
-    /**
-     * Checks if this skill bundle is equal to another object.
-     * 检查此技能包是否等于另一个对象
-     * <p>
-     * Two bundles are equal if they contain the same skill instances with the same data.
-     * 如果两个技能包包含具有相同数据的相同技能实例，则它们相等
-     * </p>
-     *
-     * @param o The object to compare with
-     *          要比较的对象
-     * @return true if the objects are equal skill bundles, false otherwise
-     *         如果对象是相等的技能包则返回 true，否则返回 false
-     * @since 1.0.0
-     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof SkillBundle that)) return false;
-        // 比较 DataSkill 列表（包含 NBT 和 cost）
-        return getAllData().equals(that.getAllData());
+        return skills.equals(that.skills);
     }
 
-    /**
-     * Returns the hash code for this skill bundle.
-     * 返回此技能包的哈希码
-     * <p>
-     * The hash code is based on all skill instances in the bundle.
-     * 哈希码基于技能包中的所有技能实例
-     * </p>
-     *
-     * @return The hash code value
-     *         哈希码值
-     * @since 1.0.0
-     */
     @Override
     public int hashCode() {
-        return getAllData().hashCode();
+        return skills.hashCode();
     }
 
-    /**
-     * Returns a string representation of this skill bundle.
-     * 返回此技能包的字符串表示
-     * <p>
-     * Useful for debugging and logging purposes.
-     * 适用于调试和日志记录
-     * </p>
-     *
-     * @return A string representation of the skill bundle
-     *         技能包的字符串表示
-     * @since 1.0.0
-     */
     @Override
     public String toString() {
-        return "SkillsComponent{" +
-                "skills=" + getStrings(getAllData()) +
-                '}';
+        return "SkillBundle{" + skills + '}';
     }
 
-    /**
-     * Groups skill instances by their skill type.
-     * 按技能类型对技能实例进行分组
-     * <p>
-     * This private utility method organizes skills into two maps: one for item skills
-     * and one for skill instances, both keyed by skill type.
-     * 此私有工具方法将技能组织到两个映射表中：一个用于物品技能，一个用于技能实例，
-     * 两者都以技能类型为键
-     * </p>
-     *
-     * @param skillData List of skill instances to group
-     *                  要分组的技能实例列表
-     * @return A pair containing the skills map and the skill data map
-     *         包含技能映射表和技能数据映射表的对组
-     * @see SkillType
-     * @see ItemSkill
-     * @see ISkillInstance
-     * @since 1.0.0
-     */
-    private static Pair<Map<SkillType, List<ItemSkillRegistration<?>>>, Map<SkillType, List<ISkillInstance<?>>>>
-            groupSkills(List<ISkillInstance<?>> skillData) {
-        Map<SkillType, List<ItemSkillRegistration<?>>> skillResult          = new HashMap<>();
-        Map<SkillType, List<ISkillInstance<?>>> skillDataResult = new HashMap<>();
+    // ========== 静态工具 ==========
 
-        for (ISkillInstance<?> data : skillData) {
-            ItemSkillRegistration<?> skill = data.skill();
-            skillResult.computeIfAbsent(skill.getType(), k -> new ArrayList<>()).add(skill);
-            skillDataResult.computeIfAbsent(skill.getType(), k -> new ArrayList<>()).add(data);
+    private static Pair<Map<SkillType, List<ItemSkillRegistration<?>>>, Map<SkillType, List<ISkillInstance<?>>>>
+    groupSkills(List<ISkillInstance<?>> instances) {
+        Map<SkillType, List<ItemSkillRegistration<?>>> registryResult = new HashMap<>();
+        Map<SkillType, List<ISkillInstance<?>>> dataResult = new HashMap<>();
+
+        for (ISkillInstance<?> instance : instances) {
+            ItemSkillRegistration<?> registration = instance.skill();
+            registryResult.computeIfAbsent(registration.getType(), k -> new ArrayList<>()).add(registration);
+            dataResult.computeIfAbsent(registration.getType(), k -> new ArrayList<>()).add(instance);
         }
 
-        return Pair.of(skillResult, skillDataResult);
-    }
-
-    /**
-     * Creates a skill bundle from a list of skill ID strings.
-     * 从技能 ID 字符串列表创建技能包
-     * <p>
-     * This is a utility method for deserializing skill bundles from string representation.
-     * Useful when loading saved skill data.
-     * 这是一个用于从字符串表示反序列化技能包的工具方法。适用于加载保存的技能数据
-     * </p>
-     *
-     * @param skillIds List of skill ID strings to convert into skill instances
-     *                 要转换为技能实例的技能 ID 字符串列表
-     * @return A new skill bundle containing the converted skill instances
-     *         包含转换后的技能实例的新技能包
-     * @see SkillData#fromString(String)
-     * @see ISkillInstance#fromData(SkillData)
-     * @since 1.0.0
-     */
-    public static SkillBundle fromStrings(List<String> skillIds) {
-        return new SkillBundle(getSkills(skillIds));
-    }
-
-    /**
-     * Converts a list of skill instances into a list of string representations.
-     * 将技能实例列表转换为字符串表示列表
-     * <p>
-     * This is the inverse operation of {@link #getSkills(List)}.
-     * Used for serializing skill data to storage or network transmission.
-     * 这是 {@link #getSkills(List)} 的逆操作。用于将技能数据序列化以存储或网络传输
-     * </p>
-    *
-     * @param skills List of skill instances to convert, or null for empty list
-     *               要转换的技能实例列表，传入 null 返回空列表
-     * @return List of string representations of the skill instances
-     *         技能实例的字符串表示列表
-     * @see ISkillInstance#toData()
-     * @see SkillData#toString()
-     * @since 1.0.0
-     */
-    public static List<String> getStrings(List<ISkillInstance<?>> skills) {
-        if (skills == null) return Collections.emptyList();
-        return skills.stream()
-                .map(ISkillInstance::toData)
-                .filter(Objects::nonNull)
-                .map(SkillData::toString)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Converts a list of skill ID strings into skill instances.
-     * 将技能 ID 字符串列表转换为技能实例
-     * <p>
-     * This is the inverse operation of {@link #getStrings(List)}.
-     * Used for deserializing skill data from storage or network transmission.
-     * 这是 {@link #getStrings(List)} 的逆操作。用于从存储或网络传输反序列化技能数据
-     * </p>
-     *
-     * @param strings List of skill ID strings to convert, or null for empty list
-     *                要转换的技能 ID 字符串列表，传入 null 返回空列表
-     * @return List of skill instances created from the string representations
-     *         从字符串表示创建的技能实例列表
-     * @see SkillData#fromString(String)
-     * @see ISkillInstance#fromData(SkillData)
-     * @since 1.0.0
-     */
-    public static List<ISkillInstance<?>> getSkills(List<String> strings) {
-        if (strings == null) return Collections.emptyList();
-        return strings.stream()
-                .map(SkillData::fromString)
-                .filter(Objects::nonNull)
-                .map(ISkillInstance::fromData)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return Pair.of(registryResult, dataResult);
     }
 }

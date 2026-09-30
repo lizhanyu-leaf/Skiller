@@ -1,20 +1,43 @@
 package com.leaf.skiller.foundation.skill;
 
 import com.leaf.skiller.api.registry.SkillerBuiltInRegistries;
+import com.leaf.skiller.api.registry.SkillerRegistries;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
+import com.lowdragmc.lowdraglib2.syncdata.IPersistedSerializable;
+import com.lowdragmc.lowdraglib2.syncdata.annotation.Persisted;
+import com.lowdragmc.lowdraglib2.utils.PersistedParser;
+import com.mojang.serialization.Codec;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 
-public class ItemSkillRegistration<C extends SkillContext> {
-    private final SkillType type;
-    private final ResourceKey<SkillContextFactory<C>> factoryKey;
-    private final ItemSkill<C> skill;
+public class ItemSkillRegistration<C extends SkillContext> implements IPersistedSerializable {
 
-    public ItemSkillRegistration(SkillType type, ResourceKey<SkillContextFactory<C>> factoryKey, ItemSkill<C> skill) {
-        this.type = type;
-        this.factoryKey = factoryKey;
+    public static Codec<ItemSkillRegistration<?>> CODEC
+            = PersistedParser.createCodec(ItemSkillRegistration::new);
+
+    public static StreamCodec<ByteBuf, ItemSkillRegistration<?>> STREAM_CODEC
+            = PersistedParser.createStreamCodec(ItemSkillRegistration::new);
+
+
+    @Persisted(key = "type")
+    private ResourceLocation type;
+    @Persisted(key = "factory")
+    private ResourceLocation factoryKey;
+    @Persisted(key = "skill")
+    private ResourceLocation skillId;
+
+    private ItemSkill<C> skill;
+
+    public ItemSkillRegistration() {}
+
+    public ItemSkillRegistration(ResourceLocation id, SkillType type, ResourceKey<SkillContextFactory<C>> factoryKey, ItemSkill<C> skill) {
+        this.type = type.getId();
+        this.factoryKey = factoryKey.location();
         this.skill = skill;
+        this.skillId = id;
     }
 
     /**
@@ -32,10 +55,18 @@ public class ItemSkillRegistration<C extends SkillContext> {
      * @see SkillType
      */
     public SkillType getType() {
-        return type;
+        return SkillTypeFactory.of(type);
     }
 
+    @SuppressWarnings("unchecked")
     public ItemSkill<C> getSkill() {
+        if (skill == null) {
+            var reg = SkillerBuiltInRegistries.SKILLS.get(skillId);
+            if (reg == null) {
+                throw new IllegalStateException("Unknown skill: " + skillId);
+            }
+            skill = (ItemSkill<C>) reg.skill;
+        }
         return skill;
     }
 
@@ -54,11 +85,12 @@ public class ItemSkillRegistration<C extends SkillContext> {
      * @see SkillerBuiltInRegistries#SKILLS
      */
     public ResourceLocation getId() {
-        return SkillerBuiltInRegistries.SKILLS.getKey(this);
+        return skillId;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked"})
     public SkillContextFactory<C> getFactory() {
-        return (SkillContextFactory<C>) SkillerBuiltInRegistries.CONTEXT_FACTORIES.get((ResourceKey) factoryKey);
+        return (SkillContextFactory<C>) SkillerBuiltInRegistries.CONTEXT_FACTORIES.get(
+                ResourceKey.create(SkillerRegistries.CONTEXT_FACTORY, factoryKey));
     }
 }

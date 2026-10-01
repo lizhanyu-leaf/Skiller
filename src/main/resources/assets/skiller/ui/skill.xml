@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ldlib2-ui xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Low-Drag-MC/LDLib2/refs/heads/1.21/ldlib2-ui.xsd">
+    <stylesheet location="ldlib2:lss/modern.lss"/>
+    <style>
+        .center-label {
+            text-shadow: true;
+            horizontal-align: center;
+        }
+    </style>
+    <root class="panel_bg" style=
+            "width: 300; height: 300; flex-direction: row">
+        <label class="center-label"
+               style="position: absolute; width: 100%; height: 30">
+            UI
+        </label>
+        <!-- 左区域 -->
+        <element id="left-panel"
+                 style="width: 40%; height: 100%; margin: 2; padding: 8; top: 5; gap: 6">
+            <label class="center-label" style="height:15">Select</label>
+            <!-- Select 列表的容器 -->
+            <element id="select-list"
+                     style="width: 100%; flex-grow: 1; flex-direction: column; gap: 8"/>
+            <!-- 底部导航：▲/▼ 与位置指示器 -->
+            <element id="select-nav"
+                     style="width: 100%; height: 20; flex-direction: row; justify-content: space-between; align-items: center">
+                <button id="nav-up" text="▲" style="width: 30"/>
+                <label id="nav-indicator" class="center-label" style="height: 15">1/1</label>
+                <button id="nav-down" text="▼" style="width: 30"/>
+            </element>
+        </element>
+        <!-- 右区域 -->
+        <element id="right-panel"
+                 style="width: 60%; height: 100%; margin: 2; padding: 8; top: 5; gap: 6">
+            <label class="center-label" style="height: 15">Info</label>
+            <element style="height: 90%; flex-direction: column; justify-content: space-between">
+                <element id="content-area"
+                         style="height: 80%; flex-direction: column; gap: 4; overflow: scroll">
+                    <label class="center-label" style="text-color: #DDDDDD">Content</label>
+                </element>
+                <element>
+                    <label id="subtitle-label" class="center-label" style="height: 15; text-color: #BBBBBB">Subtitle</label>
+                    <element style="flex-direction: row; justify-content: space-between">
+                        <button text="?" style="width:50"/>
+                        <button text="Ponder" style="width:50"/>
+                    </element>
+                </element>
+            </element>
+        </element>
+    </root>
+</ldlib2-ui>

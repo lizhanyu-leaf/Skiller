@@ -8,7 +8,13 @@
   "key.skiller.skill_2": "技能槽位 3",
 
   "skill.skiller.dust_sweep": "扫尘",
+  "skill.skiller.dust_sweep.info": "将周围的掉落物吸取到自己身边。\n触发方式：\n- 对着方块右键\n- 按住绑定的技能键（按住时显示金色轮廓预览）\n\n配置项（实例 NBT）：radius（半径）、pull_strength（拉力）",
 
   "skillType.skiller.right_click_block": "方块右键",
-  "skillType.skiller.key_pressed": "按键触发"
+  "skillType.skiller.key_pressed": "按键触发",
+
+  "skiller.screen.title": "技能",
+  "skiller.screen.no_info": "（暂无详情）",
+
+  "skiller.tooltip.hold_to_show_skill": "按住 [%1$s] 展示技能详情"
 }

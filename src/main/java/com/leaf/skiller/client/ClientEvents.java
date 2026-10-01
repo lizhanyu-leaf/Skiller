@@ -7,6 +7,7 @@ import com.leaf.skiller.client.tooltip.SkillTooltipHandler;
 import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
@@ -87,7 +88,12 @@ public class ClientEvents {
      */
     @SubscribeEvent
     public static void modifyTooltip(ItemTooltipEvent event) {
-        SkillTooltipHandler.addTooltip(event);
+        SkillTooltipHandler.addToTooltip(event.getToolTip(), event.getItemStack());
+    }
+
+    @SubscribeEvent
+    public static void onTick(ClientTickEvent.Post event) {
+        SkillTooltipHandler.tick();
     }
 
     /**

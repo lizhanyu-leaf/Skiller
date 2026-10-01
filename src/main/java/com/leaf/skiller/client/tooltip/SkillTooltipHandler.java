@@ -1,160 +1,165 @@
 package com.leaf.skiller.client.tooltip;
 
 import com.leaf.skiller.AllDataComponents;
-import com.leaf.skiller.AllKeys;
-import com.leaf.skiller.Skiller;
 import com.leaf.skiller.content.skill.SkillComponent;
-import com.leaf.skiller.foundation.skill.ISkillInstance;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
 
-/**
- * Handler for adding skill-related information to item tooltips.
- * 用于向物品工具提示添加技能相关信息的处理程序。
- * <p>
- * This class provides functionality to inspect items and augment their tooltips with skill data.
- * When an item has associated skills, this handler adds appropriate information to help players
- * understand which skills are bound to which keys.
- * 此类提供检查物品并使用技能数据增强其工具提示的功能。
- * 当物品具有关联的技能时，此处理程序会添加适当的信息以帮助玩家了解哪些技能绑定到哪些键。
- * </p>
- * <p>
- * Tooltip behavior varies based on keyboard input:
- * 工具提示行为因键盘输入而异：
- * <ul>
- * <li>Without Alt key: Shows a brief hint that skill information is available
- * - 不按Alt键：显示简短提示，表明有技能信息可用</li>
- * <li>With Alt key: Displays detailed skill information including key bindings, names, levels, and types
- * - 按住Alt键：显示详细的技能信息，包括按键绑定、名称、等级和类型</li>
- * </ul>
- *
- * @see AllDataComponents#SKILL_COMPONENT
- * @see ISkillInstance
- * @see SkillComponent
- * @since 1.0.0
- */
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
 public class SkillTooltipHandler {
 
-    /**
-     * Adds skill information to the item tooltip based on the Alt key state.
- * 根据Alt键状态向物品工具提示添加技能信息。
-     * <p>
-     * This method examines the item stack to determine if it has associated skill data.
- * If no skill component is present, the method returns without modifying the tooltip.
- * 此方法检查物品堆以确定其是否具有关联的技能数据。
- * 如果不存在技能组件，则该方法返回而不修改工具提示。
-     * </p>
-     * <p>
-     * Tooltip behavior:
- * 工具提示行为：
-     * <ul>
-     * <li><b>Alt key not held:</b> Adds a single gray line prompting the player to hold Alt for details
- * - <b>未按住Alt键：</b>添加单行灰色文本，提示玩家按住Alt键查看详细信息</li>
-     * <li><b>Alt key held:</b> Adds a header line and lists all skills with their key bindings,
- *       names, levels, and types in a formatted manner
- * - <b>按住Alt键：</b>添加标题行并以格式化方式列出所有技能及其按键绑定、名称、等级和类型</li>
-     * </ul>
-     * </p>
-     *
-     * @param event The item tooltip event containing the item stack and tooltip list to modify - 包含要修改的物品堆和工具提示列表的物品工具提示事件
-     * @see ItemTooltipEvent
-     * @see ItemStack
-     * @see SkillComponent
-     * @see AllDataComponents#SKILL_COMPONENT
-     * @see Screen#hasAltDown()
-     * @see #fromSkill(Component, ISkillInstance)
-     * @since 1.0.0
-     */
-    public static void addTooltip(ItemTooltipEvent event) {
-        ItemStack stack = event.getItemStack();
-        SkillComponent component = stack.get(AllDataComponents.SKILL_COMPONENT);
-        if (component == null) return;
+    public static boolean enable = true;
 
-        // Show brief hint when Alt is not held
-        // 未按住Alt键时显示简短提示
-        if (!Screen.hasAltDown()) {
-            event.getToolTip().add(
-                    1,
-                    Component.translatable("tooltip.skiller.skill_tips")
-                            .withStyle(ChatFormatting.GRAY)
-            );
-        }
-        // Show detailed skill information when Alt is held
-        // 按住Alt键时显示详细技能信息
-        else {
-            event.getToolTip().add(
-                    1,
-                    Component.translatable("tooltip.skiller.skill")
-            );
+    // ========== 替代 LerpedFloat ==========
+    static float holdKeyProgress = 0;
+    static float prevHoldKeyProgress = 0;
 
-            int index = 2;
-            // Iterate through all skill bindings and add them to the tooltip
-            // 遍历所有技能绑定并将它们添加到工具提示中
-            for (int i : component.bindings().keySet()) {
-                // Guard against binding keys outside the registered key array.
-                // 防止绑定键超出已注册按键数组的范围。
-                if (i < 0 || i >= AllKeys.SKILL_KEYS.length) continue;
-                KeyMapping key = AllKeys.SKILL_KEYS[i];
-                for (ISkillInstance<?> skill : component.bindings().get(i).getAllData())
-                    event.getToolTip().add(index, fromSkill(key.getTranslatedKeyMessage(), skill));
-                index++;
-            }
-        }
+    static ItemStack hoveredStack = ItemStack.EMPTY;
+    static ItemStack trackingStack = ItemStack.EMPTY;
+    static boolean deferTick = false;
+
+    static final List<Consumer<ItemStack>> hoveredStackCallbacks = new ArrayList<>();
+
+    public static final String HOLD_TO_SHOW_SKILL = "skiller.tooltip.hold_to_show_skill";
+
+    // ========== Tick ==========
+
+    public static void tick() {
+        deferTick = true;
     }
 
-    /**
-     * Creates a formatted text component displaying skill information.
- * 创建显示技能信息的格式化文本组件。
-     * <p>
-     * This method constructs a rich text component that displays a skill in the following format:
- * 此方法构建一个丰富的文本组件，按以下格式显示技能：
-     * </p>
-     * <pre>
-     *   [Key] Skill Name Level - Skill Type
-     *   [键] 技能名称 等级 - 技能类型
-     * </pre>
-     * <p>
-     * The format includes:
- * 格式包括：
-     * <ul>
-     * <li>Key binding in brackets (e.g., [K])
- * - 方括号中的按键绑定（例如 [K]）</li>
-     * <li>Localized skill name (e.g., "Fireball")
- * - 本地化的技能名称（例如 "Fireball"）</li>
-     * <li>Skill level as an enchantment-style number (e.g., I, II, III)
- * - 附魔样式的技能等级数字（例如 I、II、III）</li>
-     * <li>Localized skill type (e.g., "Active", "Passive")
- * - 本地化的技能类型（例如 "Active"、"Passive"）</li>
-     * </ul>
-     * </p>
-     * <p>
-     * All text is localized using translation keys based on the skill and type IDs.
- * 所有文本都使用基于技能和类型ID的翻译键进行本地化。
-     * </p>
-     *
-     * @param key The key binding component to display (e.g., the key name) - 要显示的按键绑定组件（例如键名）
-     * @param skill The skill instance containing the skill data to display - 包含要显示的技能数据的技能实例
-     * @return A formatted text component displaying the skill information with key, name, level, and type - 显示技能信息（包括键、名称、等级和类型）的格式化文本组件
-     * @see ISkillInstance
-     * @see Component
-     * @see ResourceLocation
-     * @since 1.0.0
-     */
-    public static Component fromSkill(Component key, ISkillInstance<?> skill) {
-        ResourceLocation id = skill.skill().getId();
-        ResourceLocation typeId = skill.skill().getType().getId();
-        return Component.literal("  [")
-                .append(key)
-                .append("] ")
-                .append(Component.translatable("skill." + id.getNamespace() + "." + id.getPath()))
-                .append(" ")
-                .append(Component.translatable("enchantment.level." + skill.level()))
-                .append(" - ")
-                .append(Component.translatable("skillType." + typeId.getNamespace() + "." + typeId.getPath()));
+    public static void deferredTick() {
+        deferTick = false;
+        Minecraft mc = Minecraft.getInstance();
+
+        if (hoveredStack.isEmpty() || trackingStack.isEmpty()) {
+            trackingStack = ItemStack.EMPTY;
+            holdKeyProgress = 0;
+            prevHoldKeyProgress = 0;
+            return;
+        }
+
+        // 只判断 Alt：tooltip 本身只在屏幕打开时存在（mc.screen != null），
+        // 旧移植代码里的 currentScreen == null 条件与该前提矛盾，导致进度
+        // 永远走衰减分支、进度条永远不出现。
+        // Only gate on Alt: a tooltip only exists while a screen is open
+        // (mc.screen != null), so the ported currentScreen == null condition
+        // contradicted its own premise and kept the progress at zero forever.
+        if (RenderSystem.isOnRenderThread() && isAltDown()) {
+            if (holdKeyProgress >= 1) {
+                // 进度满 → 打开技能界面
+//                com.leaf.skiller.client.gui.SkillScreen.open(trackingStack);
+                holdKeyProgress = 0;
+                prevHoldKeyProgress = 0;
+                return;
+            }
+            prevHoldKeyProgress = holdKeyProgress;
+            holdKeyProgress = Math.min(1,
+                    holdKeyProgress + Math.max(.25f, holdKeyProgress) * .25f);
+        } else {
+            prevHoldKeyProgress = holdKeyProgress;
+            holdKeyProgress = Math.max(0, holdKeyProgress - .05f);
+        }
+
+        hoveredStack = ItemStack.EMPTY;
+    }
+
+    private static boolean isAltDown() {
+        return Screen.hasAltDown();
+    }
+
+    // ========== Tooltip 注入 ==========
+
+    public static void addToTooltip(List<Component> toolTip, ItemStack stack) {
+        if (!enable) return;
+
+        updateHovered(stack);
+
+        if (deferTick) deferredTick();
+
+        // 内容比较而非引用比较：部分 GUI 每帧重建 stack 实例，
+        // 引用比较会导致进度条时有时无。
+        // Compare by content, not identity: some screens rebuild the stack
+        // instance every frame, which would flicker the progress bar.
+        if (!ItemStack.isSameItemSameComponents(trackingStack, stack)) return;
+
+        // 替代 AnimationTickHolder.getPartialTicksUI()
+        float partialTicks = Minecraft.getInstance()
+                .getTimer()
+                .getGameTimeDeltaPartialTick(true);
+
+        // 替代 LerpedFloat.getValue(partialTicks)
+        float smoothProgress = Mth.lerp(partialTicks, prevHoldKeyProgress, holdKeyProgress);
+
+        Component component = makeProgressBar(Math.min(1, smoothProgress * 8 / 7f));
+
+        if (toolTip.size() < 2) toolTip.add(component);
+        else toolTip.add(1, component);
+    }
+
+    protected static void updateHovered(ItemStack stack) {
+        ItemStack prevStack = trackingStack;
+        hoveredStack = ItemStack.EMPTY;
+
+        if (stack.isEmpty()) return;
+
+        SkillComponent component = stack.get(AllDataComponents.SKILL_COMPONENT);
+        if (component == null || component.bindings() == null || component.bindings().isEmpty()) return;
+
+        if (prevStack.isEmpty() || !prevStack.is(stack.getItem())) {
+            holdKeyProgress = 0;
+            prevHoldKeyProgress = 0;
+        }
+
+        hoveredStack = stack;
+        trackingStack = stack;
+
+        for (Consumer<ItemStack> callback : hoveredStackCallbacks)
+            callback.accept(hoveredStack.copy());
+    }
+
+    // ========== 进度条 ==========
+
+    private static Component makeProgressBar(float progress) {
+        MutableComponent holdAlt = Component.translatable(HOLD_TO_SHOW_SKILL,
+                        Component.literal("Alt").withStyle(ChatFormatting.GRAY))
+                .withStyle(ChatFormatting.DARK_GRAY);
+
+        Font font = Minecraft.getInstance().font;
+        float charWidth = font.width("|");
+        float tipWidth = font.width(holdAlt);
+
+        int total = (int) (tipWidth / charWidth);
+        int current = (int) (progress * total);
+
+        if (progress > 0) {
+            StringBuilder bars = new StringBuilder();
+            bars.append(ChatFormatting.GRAY).append("|".repeat(current));
+            if (progress < 1)
+                bars.append(ChatFormatting.DARK_GRAY).append("|".repeat(total - current));
+            return Component.literal(bars.toString());
+        }
+
+        return holdAlt;
+    }
+
+    // ========== 回调 ==========
+
+    public synchronized static void registerHoveredStackCallback(Consumer<ItemStack> consumer) {
+        hoveredStackCallbacks.add(consumer);
+    }
+
+    public synchronized static void removeHoveredStackCallback(Consumer<ItemStack> consumer) {
+        hoveredStackCallbacks.remove(consumer);
     }
 }

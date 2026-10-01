@@ -8,7 +8,13 @@
   "key.skiller.skill_2": "Skill Slot 3",
 
   "skill.skiller.dust_sweep": "Dust Sweep",
+  "skill.skiller.dust_sweep.info": "Attracts nearby dropped items toward you.\nTriggers:\n- Right-click a block\n- Hold the bound skill key (a gold outline preview shows while held)\n\nInstance NBT options: radius, pull_strength",
 
   "skillType.skiller.right_click_block": "Right-Click Block",
-  "skillType.skiller.key_pressed": "Key Pressed"
+  "skillType.skiller.key_pressed": "Key Pressed",
+
+  "skiller.screen.title": "Skills",
+  "skiller.screen.no_info": "(no details)",
+
+  "skiller.tooltip.hold_to_show_skill": "Hold [%1$s] to Show Skill"
 }

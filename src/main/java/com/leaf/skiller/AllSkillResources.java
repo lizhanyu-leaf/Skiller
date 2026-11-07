@@ -2,7 +2,10 @@ package com.leaf.skiller;
 
 import com.leaf.skiller.api.registry.SkillerBuiltInRegistries;
 import com.leaf.skiller.api.registry.SkillerRegistries;
+import com.leaf.skiller.content.skill.resource.CooldownResource;
+import com.leaf.skiller.content.skill.resource.DurabilityResource;
 import com.leaf.skiller.content.skill.resource.EmptyResource;
+import com.leaf.skiller.content.skill.resource.MultiSkillResource;
 import com.leaf.skiller.foundation.SkillResource;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceKey;
@@ -47,7 +50,38 @@ public enum AllSkillResources {
      * 可以自由激活，没有任何约束。
      * </p>
      */
-    EMPTY("empty", EmptyResource::new)
+    EMPTY("empty", EmptyResource::new),
+
+    /**
+     * The cooldown resource: one unit is one vanilla cooldown tick on the
+     * addressed item; consumable while that item is off cooldown.
+     * 冷却资源：1单位为被寻址物品的1个原版冷却tick；
+     * 该物品不在冷却时可消耗。
+     */
+    COOLDOWN("cooldown", CooldownResource::new),
+
+    /**
+     * The durability resource: one unit is one durability point on the addressed
+     * item; the last point is kept by default (NBT-togglable).
+     * 耐久资源：1单位为被寻址物品的1点耐久；
+     * 默认保留最后一点（可通过NBT关闭）。
+     */
+    DURABILITY("durability", DurabilityResource::new),
+
+    /**
+     * The multi skill resource: consumes every member resource listed in the
+     * instance NBT atomically.
+     * 多重技能资源：原子地消耗实例NBT中列出的所有成员资源。
+     * <p>
+     * Members come from the instance NBT {@code resources} string list; a skill
+     * released through this resource only fires when every member can pay, and a
+     * rate expression can still wrap the whole bundle.
+     * 成员来自实例NBT的 {@code resources} 字符串列表；
+     * 经此资源释放的技能只有在所有成员都付得起时才会生效，
+     * 且变化率表达式仍可作用于整体。
+     * </p>
+     */
+    MULTI("multi", MultiSkillResource::new)
     ;
 
     /**
@@ -143,18 +177,18 @@ public enum AllSkillResources {
 
     }
 
-    /**
-     * Static initialization block that registers all skill resources with the game registry.
-     * 向游戏注册表注册所有技能资源的静态初始化块。
-     * <p>
-     * This block runs once when the class is loaded, registering each enum
-     * value's resource instance with the appropriate registry. Each resource
-     * is registered under its unique resource key.
-     * 此块在类加载时运行一次，将每个枚举值的资源实例注册到
-     * 相应的注册表。每个资源在其唯一的资源键下注册。
-     * </p>
-     *
-     * @see SkillerBuiltInRegistries
+    /*
+      Static initialization block that registers all skill resources with the game registry.
+      向游戏注册表注册所有技能资源的静态初始化块。
+      <p>
+      This block runs once when the class is loaded, registering each enum
+      value's resource instance with the appropriate registry. Each resource
+      is registered under its unique resource key.
+      此块在类加载时运行一次，将每个枚举值的资源实例注册到
+      相应的注册表。每个资源在其唯一的资源键下注册。
+      </p>
+
+      @see SkillerBuiltInRegistries
      * @see Registry
      * @since 1.0.0
      */

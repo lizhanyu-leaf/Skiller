@@ -1,10 +1,13 @@
 package com.leaf.skiller.foundation;
 
 import com.leaf.skiller.Skiller;
+import com.leaf.skiller.foundation.skill.ISkillInstance;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Objects;
 
 /**
  * A record containing all data needed to represent and recreate a skill instance.
@@ -38,6 +41,16 @@ import org.jetbrains.annotations.NotNull;
  * @see CompoundTag
  */
 public record SkillData(ResourceLocation skillId, ResourceLocation factoryId, CompoundTag nbt) {
+
+    /**
+     * NBT key of the embedded factory id. Read and write must use the SAME key:
+     * NBT lookup is case-sensitive, and the previous split ("Factory" written,
+     * "factory" read) silently dropped every skill on the string round-trip.
+     * 嵌入工厂ID的NBT键。读写必须使用同一个键：
+     * NBT查找区分大小写，之前读写键不一致（写"Factory"、读"factory"）
+     * 会使所有技能在字符串往返中静默丢失。
+     */
+    public static final String FACTORY_KEY = "factory";
 
     /**
      * Parses a SkillData from its string representation.
@@ -74,8 +87,8 @@ public record SkillData(ResourceLocation skillId, ResourceLocation factoryId, Co
         String nbtStr = input.substring(brace);
 
         try {
-            CompoundTag tag = TagParser.parseTag(nbtStr);
-            ResourceLocation factory = ResourceLocation.parse(tag.getString("Factory"));
+            CompoundTag tag = Objects.requireNonNull(TagParser.parseTag(nbtStr));
+            ResourceLocation factory = Objects.requireNonNull(ResourceLocation.parse(tag.getString(FACTORY_KEY)));
             return new SkillData(ResourceLocation.parse(skillId), factory, tag);
         } catch (Exception e) {
             Skiller.LOGGER.error("Failed to parse skill data: {}", input, e);
@@ -108,7 +121,7 @@ public record SkillData(ResourceLocation skillId, ResourceLocation factoryId, Co
         // {@link #fromString(String)} can restore the record losslessly.
         // 总是将工厂ID嵌入序列化标签，使 {@link #fromString(String)} 能够无损还原。
         CompoundTag tag = nbt.copy();
-        tag.putString("Factory", factoryId.toString());
+        tag.putString(FACTORY_KEY, factoryId.toString());
         return skillId.toString() + tag;
     }
 }

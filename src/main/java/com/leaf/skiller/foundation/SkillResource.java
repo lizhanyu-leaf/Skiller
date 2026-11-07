@@ -1,5 +1,6 @@
 package com.leaf.skiller.foundation;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Player;
 
@@ -8,26 +9,25 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 /**
- * Represents a resource that can be consumed by skill execution.
- * 表示可以被技能执行消耗的资源。
+ * Represents a resource that can be consumed by skill execution, configured by an
+ * owner NBT compound.
+ * 表示可以被技能执行消耗的资源，由拥有者NBT复合标签配置。
  * <p>
  * SkillResources define the various types of costs associated with using skills,
- * such as mana, stamina, energy, or other custom resource types.
+ * such as mana, stamina, energy, or other custom resource types. Every method
+ * receives the owner NBT (carried by {@link SkillResourceOwner}, sourced from the
+ * skill instance data), from which implementations read their configuration — e.g.
+ * the addressed slot for cooldown/durability or the member list for the multi
+ * resource. Implementations that need no configuration simply ignore the tag.
  * 技能资源定义了使用技能相关的各种成本类型，如法力、体力、能量或其他自定义资源类型。
- * </p>
- * <p>
- * This interface provides methods to query current amounts, validate consumption,
- * and perform the actual resource consumption.
- * 此接口提供查询当前数量、验证消耗和执行实际资源消耗的方法。
- * </p>
- * <p>
- * Implementations are registered in the resource registry and can be referenced
- * by ResourceKey for type-safe resource handling.
- * 实现在资源注册表中注册，可以通过ResourceKey引用以进行类型安全的资源处理。
+ * 每个方法都接收拥有者NBT（由 {@link SkillResourceOwner} 携带，来源于技能实例数据），
+ * 实现从中读取各自的配置——例如冷却/耐久的寻址槽位或多重资源的成员列表。
+ * 不需要配置的实现直接忽略该标签即可。
  * </p>
  *
  * @since 1.0.0
  * @see Consumable
+ * @see SkillResourceOwner
  * @see ResourceKey
  */
 public interface SkillResource {
@@ -58,13 +58,15 @@ public interface SkillResource {
      *
      * @param player The player to query the resource amount for
      *               要查询资源数量的玩家
+     * @param nbt    The owner NBT carrying this resource's configuration
+     *               携带此资源配置的拥有者NBT
      *
      * @return The current amount of this resource available to the player
      *         玩家当前可用的此资源数量
      *
      * @since 1.0.0
      */
-    int getAmount(Player player);
+    int getAmount(Player player, CompoundTag nbt);
 
     /**
      * Consumes the specified amount of this resource from the player.
@@ -84,14 +86,16 @@ public interface SkillResource {
      *               要从中消耗资源的玩家
      * @param amount The amount of resource to consume
      *               要消耗的资源数量
+     * @param nbt    The owner NBT carrying this resource's configuration
+     *               携带此资源配置的拥有者NBT
      *
      * @throws IllegalArgumentException if the amount is negative
      *         如果数量为负数
      *
      * @since 1.0.0
-     * @see #canConsume(Player, int)
+     * @see #canConsume(Player, int, CompoundTag)
      */
-    void consume(Player player, int amount);
+    void consume(Player player, int amount, CompoundTag nbt);
 
     /**
      * Checks whether the player has enough of this resource to consume the specified amount.
@@ -109,15 +113,17 @@ public interface SkillResource {
      *               要检查资源可用性的玩家
      * @param amount The amount of resource to check for
      *               要检查的资源数量
+     * @param nbt    The owner NBT carrying this resource's configuration
+     *               携带此资源配置的拥有者NBT
      *
      * @return true if the player has at least the specified amount of this resource
      *         如果玩家拥有至少指定数量的此资源，则返回true
      *
      * @since 1.0.0
-     * @see #consume(Player, int)
-     * @see #getAmount(Player)
+     * @see #consume(Player, int, CompoundTag)
+     * @see #getAmount(Player, CompoundTag)
      */
-    boolean canConsume(Player player, int amount);
+    boolean canConsume(Player player, int amount, CompoundTag nbt);
 
     /**
      * Creates a Consumable for this resource and player that consumes immediately.
@@ -130,6 +136,8 @@ public interface SkillResource {
      *
      * @param player The player to create the consumable for
      *               要为其创建可消耗项的玩家
+     * @param nbt    The owner NBT carrying this resource's configuration
+     *               携带此资源配置的拥有者NBT
      *
      * @return A Consumable that consumes this resource immediately
      *         一个立即消耗此资源的Consumable
@@ -137,10 +145,10 @@ public interface SkillResource {
      * @since 1.0.0
      * @see Consumable
      */
-    default Consumable getConsumable(Player player) {
+    default Consumable getConsumable(Player player, CompoundTag nbt) {
         return amount -> {
-            if (canConsume(player, amount))
-                consume(player, amount);
+            if (canConsume(player, amount, nbt))
+                consume(player, amount, nbt);
         };
     }
 
@@ -155,6 +163,8 @@ public interface SkillResource {
      *
      * @param player The player to create the delay consumable for
      *               要为其创建延迟可消耗项的玩家
+     * @param nbt    The owner NBT carrying this resource's configuration
+     *               携带此资源配置的拥有者NBT
      *
      * @return A DelayConsumable for deferred consumption of this resource
      *         一个用于延迟消耗此资源的DelayConsumable
@@ -162,8 +172,11 @@ public interface SkillResource {
      * @since 1.0.0
      * @see DelayConsumable
      */
-    default DelayConsumable getDelayConsumable(Player player) {
-        return DelayConsumable.of(this::canConsume, this::consume).apply(player);
+    default DelayConsumable getDelayConsumable(Player player, CompoundTag nbt) {
+        return DelayConsumable.of(
+                (p, amount) -> canConsume(p, amount, nbt),
+                (p, amount) -> consume(p, amount, nbt)
+        ).apply(player);
     }
 
     /**
@@ -182,7 +195,7 @@ public interface SkillResource {
      *
      * @since 1.0.0
      * @see Consumable
-     * @see SkillResource#getDelayConsumable(Player)
+     * @see SkillResource#getDelayConsumable(Player, CompoundTag)
      */
     abstract class DelayConsumable implements Consumable {
         /**

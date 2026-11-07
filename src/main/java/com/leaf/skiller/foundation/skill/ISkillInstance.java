@@ -61,20 +61,24 @@ public abstract class ISkillInstance<T extends SkillContext> {
     public abstract CompoundTag data();
 
     /**
-     * Returns the resource type consumed by this skill instance.
-     * 返回此技能实例消耗的资源类型。
+     * Returns the resource owner of this skill instance.
+     * 返回此技能实例的资源拥有者。
      * <p>
-     * Different skill instances may consume different types of resources.
-     * 不同的技能实例可能消耗不同类型的资源。
+     * The owner pairs the consumed {@link SkillResource} with its configuration NBT
+     * (rate expression, member list, ...) and applies the rate on every consumption,
+     * so callers consume through the owner instead of the bare resource.
+     * 拥有者将被消耗的 {@link SkillResource} 与其配置NBT（变化率表达式、成员列表等）
+     * 配对，并在每次消耗时应用变化率，
+     * 因此调用方应经拥有者消耗，而不是直接使用裸资源。
      * </p>
      *
-     * @return The skill resource this instance consumes
-     *         此实例消耗的技能资源
+     * @return The resource owner this instance consumes with
+     *         此实例用于消耗的资源拥有者
      *
      * @since 1.0.0
-     * @see SkillResource
+     * @see SkillResourceOwner
      */
-    public abstract SkillResource getResource();
+    public abstract SkillResourceOwner getResource();
 
     /**
      * Returns the current level of this skill instance.

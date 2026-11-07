@@ -68,7 +68,7 @@ public class AutoSkillContextFactory implements SkillContextFactory<AutoSkillCon
     }
 
     // 约定的颜色 NBT 结构：{r, g, b, a} 四个 float
-    private static ColorConfig readColor(CompoundTag data, String key) {
+    public static ColorConfig readColor(CompoundTag data, String key) {
         CompoundTag tag = data.getCompound(key);
         return new ColorConfig(
                 tag.getFloat("r"),
@@ -199,6 +199,10 @@ public class AutoSkillContextFactory implements SkillContextFactory<AutoSkillCon
                     (tag, key, value) -> { }
             );
             return this;
+        }
+
+        public Config addDefaultColorGetter(Function<Integer, ColorConfig> defaultGetter) {
+            return addColor(AutoSkillContextFactory::readColor, defaultGetter);
         }
 
         // 只填默认值；getter 按 {r, g, b, a} 的约定结构读取

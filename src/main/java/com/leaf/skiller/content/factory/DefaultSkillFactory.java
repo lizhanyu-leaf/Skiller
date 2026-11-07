@@ -2,7 +2,7 @@ package com.leaf.skiller.content.factory;
 
 import com.leaf.skiller.AllSkillResources;
 import com.leaf.skiller.content.skill.instance.DefaultSkillInstance;
-import com.leaf.skiller.foundation.SkillResource;
+import com.leaf.skiller.foundation.SkillResourceOwner;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ItemSkill;
 import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
@@ -79,8 +79,8 @@ public class DefaultSkillFactory<T extends SkillContext> extends NbtSkillInstanc
      *
      * @param skill    the item skill definition for this instance
      *                 此实例的物品技能定义
-     * @param resource the skill resource type for consumption/management
-     *                 用于消耗/管理的技能资源类型
+     * @param resource the resource owner (resource plus its configuration NBT)
+     *                 资源拥有者（资源及其配置NBT）
      * @param level    the skill level affecting behavior and power
      *                 影响行为和威力的技能等级
      * @param nbt      the NBT compound tag containing persistent skill data
@@ -89,12 +89,12 @@ public class DefaultSkillFactory<T extends SkillContext> extends NbtSkillInstanc
      *         具有指定配置的新 DefaultSkillInstance
      * @see DefaultSkillInstance
      * @see ItemSkill
-     * @see SkillResource
+     * @see SkillResourceOwner
      * @see CompoundTag
      * @since 1.0.0
      */
     @Override
-    protected DefaultSkillInstance<T> create(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag nbt) {
+    protected DefaultSkillInstance<T> create(ItemSkillRegistration<T> skill, SkillResourceOwner resource, int level, CompoundTag nbt) {
         return new DefaultSkillInstance<>(skill, resource, level, nbt);
     }
 
@@ -133,6 +133,6 @@ public class DefaultSkillFactory<T extends SkillContext> extends NbtSkillInstanc
      */
     @Override
     public DefaultSkillInstance<T> createDefault(ItemSkillRegistration<T> skill) {
-        return new DefaultSkillInstance<>(skill, AllSkillResources.EMPTY.resource(), 1, new CompoundTag());
+        return new DefaultSkillInstance<>(skill, new SkillResourceOwner(AllSkillResources.EMPTY.resource()), 1, new CompoundTag());
     }
 }

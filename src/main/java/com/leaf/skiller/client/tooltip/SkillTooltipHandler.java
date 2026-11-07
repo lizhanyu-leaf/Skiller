@@ -4,13 +4,24 @@ import com.leaf.skiller.AllDataComponents;
 import com.leaf.skiller.AllKeys;
 import com.leaf.skiller.content.skill.SkillComponent;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
+import com.leaf.skiller.foundation.skill.SkillBundle;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
+import org.lwjgl.glfw.GLFW;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Handler for adding skill-related information to item tooltips.
@@ -30,6 +41,9 @@ import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
  * - 不按Alt键：显示简短提示，表明有技能信息可用</li>
  * <li>With Alt key: Displays detailed skill information including key bindings, names, levels, and types
  * - 按住Alt键：显示详细的技能信息，包括按键绑定、名称、等级和类型</li>
+ * <li>With Alt key and Up/Down arrows: Moves a ">>" cursor between skill entries; the detail of
+ *       the selected skill is shown below the whole list
+ * - 按住Alt键并按上/下方向键：在技能条目之间移动">>"光标，所选技能的详情显示在整个列表下方</li>
  * </ul>
  *
  * @see AllDataComponents#SKILL_COMPONENT
@@ -40,23 +54,50 @@ import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
 public class SkillTooltipHandler {
 
     /**
+     * Index of the skill entry the ">>" cursor currently points to.
+     * Persists across frames because {@link ItemTooltipEvent} fires every frame while hovering.
+     * ">>"光标当前指向的技能条目索引。
+     * 由于悬停时{@link ItemTooltipEvent}每帧都会触发，该索引需跨帧保存。
+     */
+    private static int cursorIndex = 0;
+
+    /**
+     * Up/Down key states from the previous frame, used for edge detection so that each physical
+     * key press moves the cursor exactly one entry instead of scrolling every frame.
+     * 上一帧的上/下方向键状态，用于边沿检测，使每次物理按键只移动一格光标，而不是每帧连续滚动。
+     */
+    private static boolean prevUp = false;
+    private static boolean prevDown = false;
+
+    /**
+     * The item stack hovered on the previous frame. The cursor resets to the first entry
+     * when the player moves the mouse onto a different item.
+     * 上一帧悬停的物品堆。当玩家将鼠标移到其他物品上时，光标会重置到第一个条目。
+     */
+    private static ItemStack lastStack = null;
+
+    /**
      * Adds skill information to the item tooltip based on the Alt key state.
- * 根据Alt键状态向物品工具提示添加技能信息。
+     * 根据Alt键状态向物品工具提示添加技能信息。
      * <p>
      * This method examines the item stack to determine if it has associated skill data.
- * If no skill component is present, the method returns without modifying the tooltip.
- * 此方法检查物品堆以确定其是否具有关联的技能数据。
- * 如果不存在技能组件，则该方法返回而不修改工具提示。
+     * If no skill component is present, the method returns without modifying the tooltip.
+     * 此方法检查物品堆以确定其是否具有关联的技能数据。
+     * 如果不存在技能组件，则该方法返回而不修改工具提示。
      * </p>
      * <p>
      * Tooltip behavior:
- * 工具提示行为：
+     * 工具提示行为：
      * <ul>
-     * <li><b>Alt key not held:</b> Adds a single gray line prompting the player to hold Alt for details
- * - <b>未按住Alt键：</b>添加单行灰色文本，提示玩家按住Alt键查看详细信息</li>
+     * <li><b>Alt key not held:</b> Adds a single gray line prompting the player to hold Alt for details;
+     *       also resets the cursor state
+     * - <b>未按住Alt键：</b>添加单行灰色文本，提示玩家按住Alt键查看详细信息；同时重置光标状态</li>
      * <li><b>Alt key held:</b> Adds a header line and lists all skills with their key bindings,
- *       names, levels, and types in a formatted manner
- * - <b>按住Alt键：</b>添加标题行并以格式化方式列出所有技能及其按键绑定、名称、等级和类型</li>
+     *       names, levels, and types in a formatted manner, the selected one marked with the
+     *       ">>" cursor (movable with Up/Down arrows); the selected skill's detail block is
+     *       appended below the whole list
+     * - <b>按住Alt键：</b>添加标题行并以格式化方式列出所有技能及其按键绑定、名称、等级和类型，
+     *       被选中的条目带">>"光标标记（可用上/下方向键移动）；所选技能的详情块追加在整个列表下方</li>
      * </ul>
      * </p>
      *
@@ -66,7 +107,8 @@ public class SkillTooltipHandler {
      * @see SkillComponent
      * @see AllDataComponents#SKILL_COMPONENT
      * @see Screen#hasAltDown()
-     * @see #fromSkill(Component, ISkillInstance)
+     * @see #fromSkill(Component, Component, ISkillInstance)
+     * @see #fromDetail(ISkillInstance)
      * @since 1.0.0
      */
     public static void addTooltip(ItemTooltipEvent event) {
@@ -74,43 +116,94 @@ public class SkillTooltipHandler {
         SkillComponent component = stack.get(AllDataComponents.SKILL_COMPONENT);
         if (component == null) return;
 
-        // Show brief hint when Alt is not held
-        // 未按住Alt键时显示简短提示
+        // Show brief hint when Alt is not held (and reset the cursor state).
+        // 未按住Alt键时显示简短提示（同时重置光标状态）。
         if (!Screen.hasAltDown()) {
+            cursorIndex = 0;
+            prevUp = false;
+            prevDown = false;
+            lastStack = null;
             event.getToolTip().add(
                     1,
                     Component.translatable("tooltip.skiller.skill_tips")
                             .withStyle(ChatFormatting.GRAY)
             );
+            return;
         }
-        // Show detailed skill information when Alt is held
-        // 按住Alt键时显示详细技能信息
-        else {
-            event.getToolTip().add(
-                    1,
-                    Component.translatable("tooltip.skiller.skill")
-            );
-            int index = 1;
-            // Iterate through all skill bindings and add them to the tooltip
-            // 遍历所有技能绑定并将它们添加到工具提示中
-            for (int i : component.bindings().keySet()) {
-                // Guard against binding keys outside the registered key array.
-                // 防止绑定键超出已注册按键数组的范围。
-                if (i < 0 || i >= AllKeys.SKILL_KEYS.length) continue;
-                KeyMapping key = AllKeys.SKILL_KEYS[i];
-                for (ISkillInstance<?> skill : component.bindings().get(i).getAllData())
-                    event.getToolTip().add(index++,
-                            fromSkill(key.getTranslatedKeyMessage(), skill));
-            }
+
+        // Collect all (key, skill) entries first so the cursor knows the list bounds.
+        // Sorted by slot index because the bindings map is a HashMap with unstable order.
+        // 先收集所有（按键, 技能）条目，让光标知道列表边界。
+        // 由于bindings是HashMap顺序不稳定，需按槽位索引排序。
+        record SkillEntry(Component key, ISkillInstance<?> skill) {}
+        List<Map.Entry<Integer, SkillBundle>> sorted = new ArrayList<>(component.bindings().entrySet());
+        sorted.sort(Map.Entry.comparingByKey());
+        List<SkillEntry> entries = new ArrayList<>();
+        for (Map.Entry<Integer, SkillBundle> entry : sorted) {
+            int i = entry.getKey();
+            // Guard against binding keys outside the registered key array.
+            // 防止绑定键超出已注册按键数组的范围。
+            if (i < 0 || i >= AllKeys.SKILL_KEYS.length) continue;
+            KeyMapping key = AllKeys.SKILL_KEYS[i];
+            for (ISkillInstance<?> skill : entry.getValue().getAllData())
+                entries.add(new SkillEntry(key.getTranslatedKeyMessage(), skill));
+        }
+
+        // Reset the cursor when a different item is hovered.
+        // 悬停其他物品时重置光标。
+        if (stack != lastStack) {
+            cursorIndex = 0;
+            lastStack = stack;
+        }
+
+        // Move the cursor with Up/Down arrows. The tooltip event fires every frame, so the raw
+        // key states are edge-detected against the previous frame to step exactly one entry per press.
+        // 用上/下方向键移动光标。tooltip事件每帧触发，因此将原始按键状态与上一帧做边沿检测，每次按键只移动一格。
+        long window = Minecraft.getInstance().getWindow().getWindow();
+        boolean up = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_UP);
+        boolean down = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_DOWN);
+        if (up && !prevUp) cursorIndex--;
+        if (down && !prevDown) cursorIndex++;
+        prevUp = up;
+        prevDown = down;
+
+        // Clamp the cursor into bounds (also covers an empty or shrunken skill list).
+        // 将光标限制在有效范围内（同时处理空列表或列表缩短的情况）。
+        cursorIndex = Mth.clamp(cursorIndex, 0, entries.size() - 1);
+
+        event.getToolTip().add(
+                1,
+                Component.translatable("tooltip.skiller.skill")
+        );
+        int index = 2;
+        // Iterate through all skill entries; the selected one gets the ">>" cursor prefix.
+        // 遍历所有技能条目；被选中的条目带">>"光标前缀。
+        for (int e = 0; e < entries.size(); e++) {
+            SkillEntry entry = entries.get(e);
+            boolean selected = e == cursorIndex;
+            event.getToolTip().add(index++,
+                    fromSkill(
+                            selected
+                                    ? Component.literal(">> ").withStyle(ChatFormatting.YELLOW)
+                                    : Component.literal("   "),
+                            entry.key(),
+                            entry.skill()
+                    ));
+        }
+        // The detail always sits below the whole skill list, not below the selected entry.
+        // 详情固定显示在整个技能列表下方，而不是所选条目下方。
+        if (!entries.isEmpty()) {
+            event.getToolTip().add(index,
+                    fromDetail(entries.get(cursorIndex).skill()).withStyle(ChatFormatting.GRAY));
         }
     }
 
     /**
      * Creates a formatted text component displaying skill information.
- * 创建显示技能信息的格式化文本组件。
+     * 创建显示技能信息的格式化文本组件。
      * <p>
      * This method constructs a rich text component that displays a skill in the following format:
- * 此方法构建一个丰富的文本组件，按以下格式显示技能：
+     * 此方法构建一个丰富的文本组件，按以下格式显示技能：
      * </p>
      * <pre>
      *   [Key] Skill Name Level - Skill Type
@@ -118,35 +211,40 @@ public class SkillTooltipHandler {
      * </pre>
      * <p>
      * The format includes:
- * 格式包括：
+     * 格式包括：
      * <ul>
+     * <li>A leading prefix segment, used as either an indent or the ">>" cursor
+     * - 前导前缀，用作缩进或">>"光标</li>
      * <li>Key binding in brackets (e.g., [K])
- * - 方括号中的按键绑定（例如 [K]）</li>
+     * - 方括号中的按键绑定（例如 [K]）</li>
      * <li>Localized skill name (e.g., "Fireball")
- * - 本地化的技能名称（例如 "Fireball"）</li>
+     * - 本地化的技能名称（例如 "Fireball"）</li>
      * <li>Skill level as an enchantment-style number (e.g., I, II, III)
- * - 附魔样式的技能等级数字（例如 I、II、III）</li>
+     * - 附魔样式的技能等级数字（例如 I、II、III）</li>
      * <li>Localized skill type (e.g., "Active", "Passive")
- * - 本地化的技能类型（例如 "Active"、"Passive"）</li>
+     * - 本地化的技能类型（例如 "Active"、"Passive"）</li>
      * </ul>
      * </p>
      * <p>
      * All text is localized using translation keys based on the skill and type IDs.
- * 所有文本都使用基于技能和类型ID的翻译键进行本地化。
+     * 所有文本都使用基于技能和类型ID的翻译键进行本地化。
      * </p>
      *
+     * @param prefix The leading prefix segment, e.g. an indent or the ">>" cursor - 前导前缀，例如缩进或">>"光标
      * @param key The key binding component to display (e.g., the key name) - 要显示的按键绑定组件（例如键名）
      * @param skill The skill instance containing the skill data to display - 包含要显示的技能数据的技能实例
-     * @return A formatted text component displaying the skill information with key, name, level, and type - 显示技能信息（包括键、名称、等级和类型）的格式化文本组件
+     * @return A formatted text component displaying the skill information with prefix, key, name, level, and type - 显示技能信息（包括前缀、键、名称、等级和类型）的格式化文本组件
      * @see ISkillInstance
      * @see Component
      * @see ResourceLocation
      * @since 1.0.0
      */
-    public static Component fromSkill(Component key, ISkillInstance<?> skill) {
+    public static Component fromSkill(Component prefix, Component key, ISkillInstance<?> skill) {
         ResourceLocation id = skill.skill().getId();
         ResourceLocation typeId = skill.skill().getType().getId();
-        return Component.literal("  [")
+        return Component.literal("")
+                .append(prefix)
+                .append("[")
                 .append(key)
                 .append("] ")
                 .append(Component.translatable("skill." + id.getNamespace() + "." + id.getPath()))
@@ -154,5 +252,95 @@ public class SkillTooltipHandler {
                 .append(Component.translatable("enchantment.level." + skill.level()))
                 .append(" - ")
                 .append(Component.translatable("skillType." + typeId.getNamespace() + "." + typeId.getPath()));
+    }
+
+    public static boolean hasDesc(ISkillInstance<?> skill) {
+        ResourceLocation id = skill.skill().getId();
+        String descKey = "skill." + id.getNamespace() + "." + id.getPath() + ".desc";
+        return Language.getInstance().has(descKey);
+    }
+
+    /**
+     * Creates a formatted text component displaying the detail line of a skill.
+     * 创建显示技能详情行的格式化文本组件。
+     * <p>
+     * The detail content is resolved from the translation key {@code skill.<namespace>.<path>.desc},
+     * derived from the skill's ID. If that key has no translation value, the line falls back to
+     * the {@code tooltip.skiller.detail_none} placeholder.
+     * 详情内容由技能ID派生的翻译键{@code skill.<namespace>.<path>.desc}解析。
+     * 如果该键没有翻译值，则回退显示{@code tooltip.skiller.detail_none}占位文本。
+     * </p>
+     * <p>
+     * In the description value, segments wrapped in underscores ({@code _xxx_}) are rendered
+     * bright (yellow) via {@link #fromMarkedText(String)}.
+     * 描述值中被下划线包裹的片段（{@code _xxx_}）会经{@link #fromMarkedText(String)}
+     * 以亮色（黄色）渲染。
+     * </p>
+     * <pre>
+     *   Details: The skill's description - 详情：技能的描述内容
+     *   Details: None (when untranslated) - 详情：暂无（未翻译时）
+     * </pre>
+     *
+     * @param skill The skill instance whose detail is to be displayed - 要显示详情的技能实例
+     * @return A formatted text component containing the "Details:" title and its content - 包含"详情："标题及其内容的格式化文本组件
+     * @see #hasDesc(ISkillInstance)
+     * @see #fromMarkedText(String)
+     * @see #fromSkill(Component, Component, ISkillInstance)
+     * @since 1.0.0
+     */
+    public static MutableComponent fromDetail(ISkillInstance<?> skill) {
+        ResourceLocation id = skill.skill().getId();
+        String descKey = "skill." + id.getNamespace() + "." + id.getPath() + ".desc";
+        // Use the description translation when present; otherwise show the "none" placeholder.
+        // 有描述翻译时使用之；否则显示"暂无"占位文本。
+        // The translation value is resolved here so that _xxx_ markers can be styled.
+        // 在此处解析翻译值，以便渲染_xxx_标记。
+        Component content = hasDesc(skill)
+                ? Component.literal("\n").append(fromMarkedText(Language.getInstance().getOrDefault(descKey)))
+                : Component.translatable("tooltip.skiller.detail_none");
+        return Component.translatable("tooltip.skiller.detail", content);
+    }
+
+    /**
+     * Converts marked text into a styled component: segments wrapped in underscores
+     * ({@code _xxx_}) are rendered bright (yellow), while the rest keeps the style
+     * inherited from its parent component.
+     * 将带标记的文本转换为带样式组件：被下划线包裹的片段（{@code _xxx_}）以亮色（黄色）渲染，
+     * 其余部分继承父组件的样式。
+     * <p>
+     * Underscores must come in pairs around a segment. A single unmatched underscore
+     * (including the segment after it) is kept literally, so ordinary prose containing
+     * underscores still renders unchanged.
+     * 下划线必须成对包裹片段。单个未成对的下划线（连同其后的内容）按原样保留，
+     * 因此含下划线的普通文本不会受影响。
+     * </p>
+     *
+     * @param text The raw (already translated) text possibly containing {@code _xxx_} markers - 原始（已翻译）文本，可能含{@code _xxx_}标记
+     * @return A component with the marked segments brightened - 标记片段已高亮的组件
+     * @see ChatFormatting#YELLOW
+     * @since 1.0.0
+     */
+    public static MutableComponent fromMarkedText(String text) {
+        MutableComponent result = Component.empty();
+        int start = 0;
+        // Split on underscore pairs; an unmatched trailing underscore stays literal.
+        // 按成对下划线切分；未成对的下划线按原样保留。
+        while (start < text.length()) {
+            int open = text.indexOf('_', start);
+            if (open < 0) {
+                result.append(text.substring(start));
+                break;
+            }
+            int close = text.indexOf('_', open + 1);
+            if (close < 0) {
+                result.append(text.substring(start));
+                break;
+            }
+            if (open > start) result.append(text.substring(start, open));
+            result.append(Component.literal(text.substring(open + 1, close))
+                    .withStyle(ChatFormatting.WHITE));
+            start = close + 1;
+        }
+        return result;
     }
 }

@@ -3,6 +3,7 @@ package com.leaf.skiller.foundation.skill;
 import com.leaf.skiller.foundation.OwnedBySkills;
 import com.leaf.skiller.foundation.SkillData;
 import com.leaf.skiller.foundation.SkillResource;
+import com.leaf.skiller.foundation.SkillResourceOwner;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
 import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
@@ -192,9 +193,14 @@ public class SkillBundle implements OwnedBySkills {
      * <p>
      * The resource handling follows the same all-or-nothing strategy: all required resources
      * are collected and checked before any is consumed, and in creative mode resources are
-     * not consumed at all.
+     * not consumed at all. Each instance's rate expression (the instance NBT {@code rate}
+     * key, applied by {@link com.leaf.skiller.foundation.SkillResourceOwner}) transforms its
+     * cost while accumulating, and instances may use the multi resource to atomically
+     * consume several member resources at once.
      * 资源处理遵循相同的全有或全无策略：在消耗之前收集并检查所有所需资源，
-     * 并且在创造模式下完全不消耗资源。
+     * 并且在创造模式下完全不消耗资源。累积时会应用每个实例的变化率表达式
+     * （实例NBT的 {@code rate} 键，由 {@link com.leaf.skiller.foundation.SkillResourceOwner} 处理），
+     * 实例也可以使用多重资源一次性原子地消耗多个成员资源。
      * </p>
      *
      * @param type The skill type to release
@@ -235,9 +241,23 @@ public class SkillBundle implements OwnedBySkills {
             Map<ResourceKey<SkillResource>, SkillResource.DelayConsumable> consumables =
                     new HashMap<>();
             for (ISkillInstance<SkillContext> instance : skills) {
-                consumables.computeIfAbsent(instance.getResource().key(),
-                        key -> instance.getResource().getDelayConsumable(player));
-                instance.consumeResource(contexts.get(instance), consumables.get(instance.getResource().key()));
+                SkillResourceOwner owner = instance.getResource();
+                // One shared inner consumable per resource key: every instance using the
+                // same resource accumulates into it, so the all-or-nothing check below
+                // sees the combined cost instead of per-instance slices. The owner NBT
+                // (rate, member list, ...) flows into the inner consumable.
+                // 每个资源键共享一个内部可消耗项：使用同一资源的所有实例都累积进它，
+                // 因而下方的全有或全无检查看到的是合并成本，而不是按实例切分的成本。
+                // 拥有者NBT（rate、成员列表等）会流入内部可消耗项。
+                SkillResource.DelayConsumable inner = consumables.computeIfAbsent(
+                        owner.key(),
+                        key -> owner.resource().getDelayConsumable(player, owner.nbt()));
+                // The owner's rate expression is applied while accumulating, so each
+                // instance contributes its own rated share while the atomic check
+                // stays shared.
+                // 拥有者的变化率表达式在累积时应用，
+                // 因此每个实例贡献自己带率的份额，而原子检查保持共享。
+                instance.consumeResource(contexts.get(instance), owner.rated(inner));
             }
 
             for (SkillResource.DelayConsumable consumable : consumables.values()) {
@@ -369,7 +389,7 @@ public class SkillBundle implements OwnedBySkills {
      */
     @Override
     public String toString() {
-        return "SkillsComponent{" +
+        return "SkillBundle{" +
                 "skills=" + getStrings(getAllData()) +
                 '}';
     }

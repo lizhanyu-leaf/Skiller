@@ -1,6 +1,8 @@
 {
-  "tooltip.skiller.skill_tips": "Press Alt to view skills",
-  "tooltip.skiller.skill": "Skills",
+  "tooltip.skiller.skill_tips": "Press Alt to view skills, ↑/↓ to select",
+  "tooltip.skiller.skill": "Skills: ",
+  "tooltip.skiller.detail": "Details: %s",
+  "tooltip.skiller.detail_none": "None",
 
   "key.categories.skiller": "Skiller",
   "key.skiller.skill_0": "Skill Slot 1",
@@ -8,6 +10,10 @@
   "key.skiller.skill_2": "Skill Slot 3",
 
   "skill.skiller.dust_sweep": "Dust Sweep",
+  "skill.skiller.dust_sweep.desc": "Pulls nearby dropped items toward you; items can be picked up _the moment they arrive_. Triggered by right-clicking a block or holding the bound skill key. While the key is held, affected items are _highlighted with an outline_.",
+
+  "skill.skiller.chain_mine": "Chain Mine",
+  "skill.skiller.chain_mine.desc": "Right-click a block in the _whitelist tag_ to _chain-break every block of the same type_ around it within range; the drops gather _at your feet_. Hold the bound skill key and aim at a whitelisted block to _preview the affected blocks_.",
 
   "skillType.skiller.right_click_block": "Right-Click Block",
   "skillType.skiller.key_pressed": "Key Pressed"

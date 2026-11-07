@@ -1,12 +1,11 @@
 package com.leaf.skiller.client.renderer.entity;
 
-import com.leaf.skiller.client.ClientSkillCache;
+import com.leaf.skiller.Skiller;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.renderer.StrategyRenderer;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.content.strategy.EntityStrategy;
 import com.leaf.skiller.foundation.skill.StrategySkill;
-import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
 import com.leaf.skiller.foundation.skill.config.impl.SkillColorContext;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
@@ -14,12 +13,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.OutlineBufferSource;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -56,42 +55,6 @@ import java.util.Set;
  */
 public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
     public static Set<Entity> glowingEntities = new HashSet<>();
-
-    /**
-     * Gets the rendering context for entity outline rendering.
-     * 获取实体轮廓渲染的渲染上下文。
-     * <p>
-     * This method extracts the necessary context information for entity selection and rendering.
-     * If the required context (such as entity information) is not available, it returns empty.
-     * 此方法提取实体选择和渲染所需的上下文信息。如果所需的上下文（如实体信息）不可用，则返回空。
-     * </p>
-     *
-     * @param mc The Minecraft client instance
-     *           Minecraft客户端实例
-     * @param level The client level being rendered
-     *              正在渲染的客户端层级
-     * @param player The player entity for context
-     *               用于上下文的玩家实体
-     * @param instance The skill instance containing configuration and level
-     *                 包含配置和等级的技能实例
-     * @return Optional containing the rendering context, or empty if context cannot be created
-     *         包含渲染上下文的Optional，如果无法创建上下文则返回空
-     * @since 1.0.0
-     */
-    @Override
-    public Optional<SkillContext> getContext(Minecraft mc, net.minecraft.client.multiplayer.ClientLevel level,
-                                  net.minecraft.world.entity.player.Player player,
-                                  ISkillInstance<SkillContext> instance) {
-        // Preview gate: only render while a skill key bound to this instance is
-        // held, so right-click (or other) triggers never show the outline.
-        // 预览门控：仅当绑定到此实例的技能键被按住时才渲染，
-        // 右键（或其他）触发不会显示轮廓。
-        if (!ClientSkillCache.isInstanceKeyPressed(instance)) return Optional.empty();
-
-        var context = instance.skill().getFactory()
-                .create(SkillContextEnvironment.noEvent(player, level), instance);
-        return Optional.ofNullable(context);
-    }
 
     /**
      * Renders entity outlines based on the strategy and configuration.
@@ -154,7 +117,7 @@ public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
         // 设置轮廓缓冲区源
         OutlineBufferSource outlineBuffer = mc.renderBuffers().outlineBufferSource();
         if (context instanceof SkillColorContext colorContext) {
-            var config = colorContext.getColor();
+            var config = colorContext.color();
             outlineBuffer.setColor(
                     (int) (config.red() * 255),
                     (int) (config.green() * 255),
@@ -227,5 +190,10 @@ public class EntityOutlineRenderer implements StrategyRenderer<SkillContext> {
     @Override
     public RenderLevelStageEvent.Stage getStage() {
         return RenderLevelStageEvent.Stage.AFTER_ENTITIES;
+    }
+
+    @Override
+    public ResourceLocation getId() {
+        return Skiller.modLoc("entity_outline_renderer");
     }
 }

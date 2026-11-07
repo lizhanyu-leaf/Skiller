@@ -18,6 +18,14 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// All sources are stored as UTF-8; keep javac from decoding them with the platform charset (GBK on
+// Chinese Windows), which garbles comments and would silently corrupt any Chinese string literal.
+// 源码均为UTF-8存储；防止javac按平台默认编码（中文Windows下为GBK）解码，
+// 否则注释会乱码，字符串字面量里的中文会被静默损坏。
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 neoForge {
     // Specify the version of NeoForge to use.
     version = project.neo_version

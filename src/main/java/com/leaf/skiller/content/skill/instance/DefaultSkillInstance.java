@@ -2,7 +2,7 @@ package com.leaf.skiller.content.skill.instance;
 
 import com.leaf.skiller.AllSkillInstanceFactories;
 import com.leaf.skiller.foundation.SkillInstanceFactory;
-import com.leaf.skiller.foundation.SkillResource;
+import com.leaf.skiller.foundation.SkillResourceOwner;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
@@ -47,8 +47,8 @@ public class DefaultSkillInstance<T extends SkillContext> extends NbtSkillInstan
      *
      * @param skill    the item skill definition that this instance represents
      *                 此实例代表的物品技能定义
-     * @param resource the skill resource type for consumption/management
-     *                 用于消耗/管理的技能资源类型
+     * @param resource the resource owner (resource plus its configuration NBT)
+     *                 资源拥有者（资源及其配置NBT）
      * @param level    the skill level, affecting behavior and power
      *                 技能等级，影响行为和威力
      * @param data     the NBT compound tag containing persistent skill data
@@ -57,11 +57,11 @@ public class DefaultSkillInstance<T extends SkillContext> extends NbtSkillInstan
      *                               如果 skill、resource 或 data 为 null 则抛出异常
      * @see ItemSkill
      * @see ItemSkillRegistration
-     * @see SkillResource
+     * @see SkillResourceOwner
      * @see CompoundTag
      * @since 1.0.0
      */
-    public DefaultSkillInstance(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag data) {
+    public DefaultSkillInstance(ItemSkillRegistration<T> skill, SkillResourceOwner resource, int level, CompoundTag data) {
         super(skill, resource, level, data);
     }
 

@@ -2,6 +2,7 @@ package com.leaf.skiller.content.skill.resource;
 
 import com.leaf.skiller.AllSkillResources;
 import com.leaf.skiller.foundation.SkillResource;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Player;
 
@@ -64,13 +65,15 @@ public class EmptyResource implements SkillResource {
      *
      * @param player the player entity to query resource amount for
      *               要查询资源数量的玩家实体
+     * @param nbt    the owner NBT carrying this resource's configuration (unused)
+     *               携带此资源配置的拥有者NBT（未使用）
      * @return a large constant value representing unlimited resource availability
      *         表示无限资源可用性的大常量值
      * @see Player
      * @since 1.0.0
      */
     @Override
-    public int getAmount(Player player) {
+    public int getAmount(Player player, CompoundTag nbt) {
         return 114514;
     }
 
@@ -89,11 +92,13 @@ public class EmptyResource implements SkillResource {
      *               要从中消耗资源的玩家实体
      * @param amount the amount of resource to consume (ignored in this implementation)
      *               要消耗的资源数量（在此实现中被忽略）
+     * @param nbt    the owner NBT carrying this resource's configuration (unused)
+     *               携带此资源配置的拥有者NBT（未使用）
      * @see Player
      * @since 1.0.0
      */
     @Override
-    public void consume(Player player, int amount) {}
+    public void consume(Player player, int amount, CompoundTag nbt) {}
 
     /**
      * Determines whether the player can consume the specified amount of this resource.
@@ -110,13 +115,15 @@ public class EmptyResource implements SkillResource {
      *               要检查资源可用性的玩家实体
      * @param amount the amount of resource to check for consumption
      *               要检查消耗的资源数量
+     * @param nbt    the owner NBT carrying this resource's configuration (unused)
+     *               携带此资源配置的拥有者NBT（未使用）
      * @return true, indicating unlimited resource availability
      *         true，表示无限资源可用性
      * @see Player
      * @since 1.0.0
      */
     @Override
-    public boolean canConsume(Player player, int amount) {
+    public boolean canConsume(Player player, int amount, CompoundTag nbt) {
         return true;
     }
 }

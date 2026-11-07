@@ -1,7 +1,10 @@
 package com.leaf.skiller.client.renderer;
 
+import com.leaf.skiller.client.renderer.block.BlockOutlineRenderer;
 import com.leaf.skiller.client.renderer.entity.EntityOutlineRenderer;
-import com.leaf.skiller.content.skill.dustsweep.DustSweepStrategy;
+import com.leaf.skiller.foundation.renderer.StrategyRenderer;
+
+import java.util.Arrays;
 
 /**
  * Registration holder for all client-side strategy renderers of the Skiller mod.
@@ -20,7 +23,7 @@ import com.leaf.skiller.content.skill.dustsweep.DustSweepStrategy;
  *
  * @see StrategyRenderers
  * @see EntityOutlineRenderer
- * @see DustSweepStrategy#RENDERER_ID
+ * @see StrategyRenderer#getId()
  * @since 1.0.0
  * @author Leaf
  */
@@ -32,6 +35,8 @@ public class AllStrategyRenderers {
      */
     public static final EntityOutlineRenderer ENTITY = new EntityOutlineRenderer();
 
+    public static final BlockOutlineRenderer BLOCK = new BlockOutlineRenderer();
+
     /**
      * Registers all strategy renderers under the renderer ids referenced by
      * their strategies. Called once from {@code ClientEvents}' static
@@ -40,11 +45,15 @@ public class AllStrategyRenderers {
      * 由 {@code ClientEvents} 的静态初始化块调用一次，该类仅在客户端加载。
      *
      * @see com.leaf.skiller.client.ClientEvents
-     * @see DustSweepStrategy#RENDERER_ID
+     * @see StrategyRenderer#getId()
      * @since 1.0.0
      */
     public static void register() {
-        StrategyRenderers.register(DustSweepStrategy.RENDERER_ID, ENTITY);
+        StrategyRenderer<?>[] a = {
+                ENTITY, BLOCK
+        };
+        Arrays.stream(a).forEach(
+                r -> StrategyRenderers.register(r.getId(), r));
     }
 
     private AllStrategyRenderers() {

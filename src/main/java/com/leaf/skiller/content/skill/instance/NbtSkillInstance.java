@@ -1,6 +1,7 @@
 package com.leaf.skiller.content.skill.instance;
 
 import com.leaf.skiller.foundation.SkillResource;
+import com.leaf.skiller.foundation.SkillResourceOwner;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
@@ -48,15 +49,16 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
     private final ItemSkillRegistration<T> skill;
 
     /**
-     * The resource type associated with this skill instance.
-     * 与此技能实例关联的资源类型。
+     * The resource owner associated with this skill instance.
+     * 与此技能实例关联的资源拥有者。
      * <p>
-     * This field defines what type of resource is consumed or managed by this skill,
-     * such as mana, stamina, energy, or other game resources.
-     * 此字段定义此技能消耗或管理的资源类型，如法力、体力、能量或其他游戏资源。
+     * This field pairs the consumed resource with its configuration NBT
+     * (rate expression, member list, ...), which is applied on every consumption.
+     * 此字段将被消耗的资源与其配置NBT（变化率表达式、成员列表等）配对，
+     * 并在每次消耗时应用变化率。
      * </p>
      */
-    private final SkillResource resource;
+    private final SkillResourceOwner resource;
 
     /**
      * The NBT compound tag containing persistent data for this skill instance.
@@ -96,8 +98,8 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
      *
      * @param skill    the item skill definition that this instance represents
      *                 此实例代表的物品技能定义
-     * @param resource the skill resource type for consumption/management
-     *                 用于消耗/管理的技能资源类型
+     * @param resource the resource owner (resource plus its configuration NBT)
+     *                 资源拥有者（资源及其配置NBT）
      * @param level    the skill level, affecting behavior and power
      *                 技能等级，影响行为和威力
      * @param data     the NBT compound tag containing persistent skill data
@@ -105,11 +107,11 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
      * @throws NullPointerException if skill, resource, or data is null
      *                               如果 skill、resource 或 data 为 null 则抛出异常
      * @see ItemSkill
-     * @see SkillResource
+     * @see SkillResourceOwner
      * @see CompoundTag
      * @since 1.0.0
      */
-    protected NbtSkillInstance(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag data) {
+    protected NbtSkillInstance(ItemSkillRegistration<T> skill, SkillResourceOwner resource, int level, CompoundTag data) {
         this.skill = skill;
         this.resource = resource;
         this.level = level;
@@ -138,23 +140,23 @@ public abstract class NbtSkillInstance<T extends SkillContext> extends ISkillIns
     }
 
     /**
-     * Returns the resource type associated with this skill instance.
-     * 返回与此技能实例关联的资源类型。
+     * Returns the resource owner associated with this skill instance.
+     * 返回与此技能实例关联的资源拥有者。
      * <p>
-     * This method provides access to the SkillResource that defines what type of
-     * resource this skill consumes or manages, such as checking availability,
-     * consuming resources, or displaying resource information to players.
-     * 此方法提供对 SkillResource 的访问，该 SkillResource 定义此技能消耗或管理的资源类型，
-     * 如检查可用性、消耗资源或向玩家显示资源信息。
+     * This method provides access to the SkillResourceOwner that pairs the resource
+     * this skill consumes with its configuration NBT, such as applying the rate
+     * expression, checking availability, or consuming resources.
+     * 此方法提供对 SkillResourceOwner 的访问，它将此技能消耗的资源与其配置NBT配对，
+     * 用于应用变化率表达式、检查可用性或消耗资源。
      * </p>
      *
-     * @return the skill resource type for this instance
-     *         此实例的技能资源类型
-     * @see SkillResource
+     * @return the resource owner for this instance
+     *         此实例的资源拥有者
+     * @see SkillResourceOwner
      * @since 1.0.0
      */
     @Override
-    public SkillResource getResource() {
+    public SkillResourceOwner getResource() {
         return resource;
     }
 

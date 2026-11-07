@@ -25,12 +25,12 @@ public class AutoSkillContext implements SkillColorContext {
     }
 
     @Override
-    public Player getPlayer() {
+    public Player player() {
         return player;
     }
 
     @Override
-    public ColorConfig getColor() {
+    public ColorConfig color() {
         return config;
     }
 }

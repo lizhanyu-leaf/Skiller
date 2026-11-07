@@ -1,6 +1,8 @@
 {
-  "tooltip.skiller.skill_tips": "按住 Alt 查看技能",
-  "tooltip.skiller.skill": "技能",
+  "tooltip.skiller.skill_tips": "按住 Alt 查看技能，↑/↓ 选择",
+  "tooltip.skiller.skill": "技能：",
+  "tooltip.skiller.detail": "详情：%s",
+  "tooltip.skiller.detail_none": "暂无",
 
   "key.categories.skiller": "技能系统",
   "key.skiller.skill_0": "技能槽位 1",
@@ -8,6 +10,10 @@
   "key.skiller.skill_2": "技能槽位 3",
 
   "skill.skiller.dust_sweep": "扫尘",
+  "skill.skiller.dust_sweep.desc": "将周围散落的掉落物吸附到自己身边，物品到达后可_立即拾取_。右键方块或按住绑定的技能键释放；按住技能键时，受影响的物品会以_描边高亮_显示。",
+
+  "skill.skiller.chain_mine": "连锁采集",
+  "skill.skiller.chain_mine.desc": "右键_白名单标签_中的方块，将周围_范围内的同类方块全部连锁破坏_，掉落物集中生成在_玩家脚下_。按住绑定的技能键并指向白名单方块，可_预览将被破坏的方块_。",
 
   "skillType.skiller.right_click_block": "方块右键",
   "skillType.skiller.key_pressed": "按键触发"

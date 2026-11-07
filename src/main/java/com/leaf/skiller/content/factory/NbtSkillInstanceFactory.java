@@ -1,14 +1,19 @@
 package com.leaf.skiller.content.factory;
 
+import com.leaf.skiller.Skiller;
 import com.leaf.skiller.api.registry.SkillerBuiltInRegistries;
 import com.leaf.skiller.foundation.SkillData;
 import com.leaf.skiller.foundation.SkillInstanceFactory;
 import com.leaf.skiller.foundation.SkillResource;
+import com.leaf.skiller.foundation.SkillResourceOwner;
 import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.ItemSkill;
 import com.leaf.skiller.foundation.skill.ItemSkillRegistration;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -104,12 +109,12 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      * <ol>
      *   <li>Retrieves the skill definition from the registry using the skill ID
      *   <li>使用技能 ID 从注册表中检索技能定义</li>
-     *   <li>Parses the resource type from NBT and retrieves it from the registry
-     *   <li>从 NBT 解析资源类型并从注册表中检索</li>
+     *   <li>Decodes the resource owner from NBT (owner compound, or legacy flat id)
+     *   <li>从 NBT 解码资源拥有者（owner 复合标签，或旧版纯ID字符串）</li>
      *   <li>Extracts the skill level from NBT
      *   <li>从 NBT 提取技能等级</li>
-     *   <li>Delegates to the abstract {@link #create(ItemSkillRegistration, SkillResource, int, CompoundTag)} method
-     *   <li>委托给抽象的 {@link #create(ItemSkillRegistration, SkillResource, int, CompoundTag)} 方法</li>
+     *   <li>Delegates to the abstract {@link #create(ItemSkillRegistration, SkillResourceOwner, int, CompoundTag)} method
+     *   <li>委托给抽象的 {@link #create(ItemSkillRegistration, SkillResourceOwner, int, CompoundTag)} 方法</li>
      * </ol>
      * <p>
      * If any required component cannot be found or is invalid, this method returns null.
@@ -136,10 +141,9 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
         var skill = SkillerBuiltInRegistries.SKILLS.get(data.skillId());
         if (skill == null) return null;
 
-        // 2. 从 NBT 获取 resource
-        // Retrieve resource from NBT
-        SkillResource resource = SkillerBuiltInRegistries.SKILL_RESOURCES
-                .get(ResourceLocation.parse(nbt.getString(resourceRegistryKey)));
+        // 2. 从 NBT 获取 resource owner（资源 + 其配置NBT）
+        // Retrieve the resource owner from NBT
+        SkillResourceOwner resource = decodeResourceOwner(nbt);
         if (resource == null) return null;
 
         // 3. 从 NBT 获取 level
@@ -147,6 +151,49 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
         int level = nbt.getInt(levelKey);
 
         return create((ItemSkillRegistration<T>) skill, resource, level, nbt);
+    }
+
+    /**
+     * Decodes the resource owner stored under the configured key.
+     * 解码存储在配置键下的资源拥有者。
+     * <p>
+     * Two formats are accepted: the current owner compound
+     * ({@code {resource: <registry id>, data: {...}}}, decoded through
+     * {@link SkillResourceOwner#CODEC}), and the legacy flat registry-id string,
+     * which is wrapped in an identity owner (empty NBT, no rate).
+     * 接受两种格式：当前的拥有者复合标签
+     * （{@code {resource: <注册表ID>, data: {...}}}，经 {@link SkillResourceOwner#CODEC} 解码），
+     * 以及旧版的纯注册表ID字符串，后者包装为恒等拥有者（空NBT，无变化率）。
+     * </p>
+     *
+     * @param nbt The instance NBT holding the resource / 持有资源的实例NBT
+     * @return The decoded owner, or null if absent or invalid / 解码出的拥有者，缺失或非法时返回 null
+     * @see SkillResourceOwner#CODEC
+     * @since 1.0.0
+     */
+    private SkillResourceOwner decodeResourceOwner(CompoundTag nbt) {
+        Tag tag = nbt.get(resourceRegistryKey);
+        if (tag instanceof CompoundTag ownerTag) {
+            // 新格式：owner 复合标签 {resource, data}
+            // Current format: owner compound {resource, data}
+            return SkillResourceOwner.CODEC.parse(NbtOps.INSTANCE, ownerTag)
+                    .resultOrPartial(error -> Skiller.LOGGER.error(
+                            "Failed to decode skill resource owner: {}", error))
+                    .orElse(null);
+        }
+        if (tag instanceof StringTag) {
+            // 旧格式：纯资源注册表ID字符串；回退为空NBT的恒等拥有者
+            // Legacy format: flat registry-id string; wrapped as an identity owner
+            try {
+                SkillResource legacy = SkillerBuiltInRegistries.SKILL_RESOURCES.get(
+                        ResourceLocation.parse(tag.getAsString()));
+                if (legacy != null) return new SkillResourceOwner(legacy, new CompoundTag());
+            } catch (Exception e) {
+                Skiller.LOGGER.error(e.toString());
+            }
+            return null;
+        }
+        return null;
     }
 
     /**
@@ -162,8 +209,8 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      * <ol>
      *   <li>Copies the instance's NBT data to avoid mutation
      *   <li>复制实例的 NBT 数据以避免变异</li>
-     *   <li>Stores the resource type's registry location using the configured key
-     *   <li>使用配置的键存储资源类型的注册表位置</li>
+     *   <li>Encodes the instance's resource owner (registry id + owner NBT) under the configured key
+     *   <li>将实例的资源拥有者（注册表ID + 拥有者NBT）编码到配置的键下</li>
      *   <li>Stores the skill level using the configured key
      *   <li>使用配置的键存储技能等级</li>
      *   <li>Creates SkillData with skill ID, factory ID, and modified NBT
@@ -194,7 +241,11 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
         }
 
         CompoundTag nbt = instance.data().copy();
-        nbt.putString(resourceRegistryKey, instance.getResource().key().location().toString());
+        // 写入完整的资源拥有者（资源注册表ID + 拥有者NBT，如 rate / 成员列表）
+        // Store the full resource owner (registry id + owner NBT, e.g. rate / member list)
+        nbt.put(resourceRegistryKey, SkillResourceOwner.CODEC
+                .encodeStart(NbtOps.INSTANCE, instance.getResource())
+                .getOrThrow());
         nbt.putInt(levelKey, instance.level());
 
         return new SkillData(skillId, factoryId, nbt);
@@ -220,8 +271,8 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      *
      * @param skill    the skill definition for this instance
      *                 此实例的技能定义
-     * @param resource the resource type for this instance
-     *                 此实例的资源类型
+     * @param resource the resource owner (resource plus its configuration NBT) for this instance
+     *                 此实例的资源拥有者（资源及其配置NBT）
      * @param level    the skill level for this instance
      *                 此实例的技能等级
      * @param nbt      the NBT data containing additional instance properties
@@ -230,9 +281,9 @@ public abstract class NbtSkillInstanceFactory<T extends SkillContext, I extends 
      *         使用提供的参数配置的新技能实例
      * @see ISkillInstance
      * @see ItemSkill
-     * @see SkillResource
+     * @see SkillResourceOwner
      * @see CompoundTag
      * @since 1.0.0
      */
-    protected abstract I create(ItemSkillRegistration<T> skill, SkillResource resource, int level, CompoundTag nbt);
+    protected abstract I create(ItemSkillRegistration<T> skill, SkillResourceOwner resource, int level, CompoundTag nbt);
 }

@@ -1,6 +1,7 @@
 package com.leaf.skiller.server;
 
 import com.leaf.skiller.content.skill.SkillComponent;
+import com.leaf.skiller.foundation.provider.SkillProviders;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;

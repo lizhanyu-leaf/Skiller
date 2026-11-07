@@ -7,6 +7,7 @@ import com.leaf.skiller.client.tooltip.SkillTooltipHandler;
 import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
@@ -21,6 +22,7 @@ import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
  * 它管理以下事件类型：
  * <ul>
  * <li>Keyboard input events for skill key bindings - 技能按键绑定的键盘输入事件</li>
+ * <li>Client tick events driving the periodic skill re-sync - 驱动周期性技能重新同步的客户端tick事件</li>
  * <li>Item tooltip events for displaying skill information - 显示技能信息的物品工具提示事件</li>
  * <li>World rendering events for skill visual effects - 技能视觉效果的世界渲染事件</li>
  * </ul>
@@ -61,6 +63,29 @@ public class ClientEvents {
     @SubscribeEvent
     public static void onKeyInput(InputEvent.Key event) {
         ClientSkillCache.onKeyInput();
+    }
+
+    /**
+     * Event handler for client tick events, driving the periodic skill re-sync.
+ * 客户端tick事件的事件处理器，驱动周期性技能重新同步。
+     * <p>
+     * While the skill system is enabled, {@link ClientSkillCache#onClientTick(Minecraft)}
+     * re-collects the player's skills and re-syncs them to the server every five ticks,
+     * so server-side consumers always operate on up-to-date skill data.
+     * 技能系统启用期间，{@link ClientSkillCache#onClientTick(Minecraft)}
+     * 每5tick重新收集玩家技能并重新同步到服务端，
+     * 使服务端消费方始终基于最新的技能数据运作。
+     * </p>
+     *
+     * @param event The client tick event / 客户端tick事件
+     * @see ClientTickEvent.Post
+     * @see ClientSkillCache#onClientTick(Minecraft)
+     * @see SubscribeEvent
+     * @since 1.0.0
+     */
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        ClientSkillCache.onClientTick(Minecraft.getInstance());
     }
 
     /**

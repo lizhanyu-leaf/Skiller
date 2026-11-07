@@ -35,6 +35,10 @@ import java.util.Map;
  * {@link SyncSkillComponentPacket} 应答——客户端是技能数据的唯一事实来源。</li>
  * <li>On a sync request (disable): clear the local cache and rendering.
  * 收到同步请求（禁用）时：清理本地缓存和渲染。</li>
+ * <li>While enabled, re-collect and re-sync the component to the server every
+ * {@value #SYNC_INTERVAL_TICKS} ticks, so the server's copy never goes stale.
+ * 启用期间每 {@value #SYNC_INTERVAL_TICKS} tick 重新收集组件并同步到服务端，
+ * 使服务端的副本永不过期。</li>
  * </ul>
  *
  * @see com.leaf.skiller.content.packet.SkillSyncRequestPacket
@@ -85,6 +89,19 @@ public class ClientSkillCache {
      * @since 1.0.0
      */
     private static boolean enable = false;
+
+    /**
+     * Interval in ticks between periodic re-syncs while the system is enabled.
+     * 技能系统启用期间，周期性重新同步的间隔（tick）。
+     */
+    private static final int SYNC_INTERVAL_TICKS = 5;
+
+    /**
+     * Tick counter for the periodic sync; reset to zero on every send, including
+     * the initial sync answering the enable request.
+     * 周期同步的tick计数器；每次发送后归零，包括应答启用请求的初次同步。
+     */
+    private static int syncCounter = 0;
 
     /**
      * Checks whether the skill system is currently enabled.
@@ -204,14 +221,11 @@ public class ClientSkillCache {
         if (enableRequest) {
             if (enable) return;
             enable = true;
-
-            skills = SkillProviders.collectAllSkills(mc.player);
-            StrategyRenderers.schedule();
-
-            // Answer the server with the merged component; the server only
-            // holds a placeholder until this arrives.
-            // 将合并后的组件应答给服务端；在此到达之前服务端只有占位数据。
-            PacketDistributor.sendToServer(new SyncSkillComponentPacket(skills));
+            // Reset the periodic counter so the next re-sync comes a full
+            // interval after this initial answer.
+            // 重置周期计数器，使下一次重新同步恰好在本初次应答一个完整间隔后发生。
+            syncCounter = 0;
+            collectAndSync(mc);
         } else {
             if (!enable) return;
             enable = false;
@@ -221,5 +235,56 @@ public class ClientSkillCache {
             skills = SkillComponent.EMPTY;
             StrategyRenderers.disable();
         }
+    }
+
+    /**
+     * Periodic tick handler: while the system is enabled, re-collects the player's
+     * skills and re-syncs them to the server every {@value #SYNC_INTERVAL_TICKS} ticks.
+     * 周期tick处理：技能系统启用期间，每 {@value #SYNC_INTERVAL_TICKS} tick
+     * 重新收集玩家技能并重新同步到服务端。
+     * <p>
+     * The client stays the single source of truth: the server's copy of the
+     * component is refreshed exactly the same way as on the initial enable, so
+     * gameplay logic reading the server cache always sees current data.
+     * 客户端仍是唯一事实来源：服务端的组件副本以与初次启用完全相同的方式刷新，
+     * 读取服务端缓存的游戏逻辑因此始终看到最新数据。
+     * </p>
+     *
+     * @param mc The Minecraft client instance / Minecraft客户端实例
+     * @see #collectAndSync(Minecraft)
+     * @see com.leaf.skiller.client.ClientEvents
+     * @since 1.0.0
+     */
+    public static void onClientTick(Minecraft mc) {
+        if (mc.player == null || !enable) return;
+        if (++syncCounter < SYNC_INTERVAL_TICKS) return;
+        syncCounter = 0;
+        collectAndSync(mc);
+    }
+
+    /**
+     * Re-collects the player's skills, rebuilds the renderer schedule, and answers
+     * the server with the merged component.
+     * 重新收集玩家技能、重建渲染调度，并将合并后的组件应答给服务端。
+     * <p>
+     * Shared by the initial enable answer and the periodic re-sync, so both paths
+     * produce identical server state.
+     * 由初次启用的应答与周期性重新同步共用，因此两条路径产生完全一致的服务端状态。
+     * </p>
+     *
+     * @param mc The Minecraft client instance / Minecraft客户端实例
+     * @see SkillProviders#collectAllSkills
+     * @see StrategyRenderers#schedule()
+     * @see SyncSkillComponentPacket
+     * @since 1.0.0
+     */
+    private static void collectAndSync(Minecraft mc) {
+        skills = SkillProviders.collectAllSkills(mc.player);
+        StrategyRenderers.schedule();
+
+        // Answer the server with the merged component; the server only
+        // holds a placeholder until this arrives.
+        // 将合并后的组件应答给服务端；在此到达之前服务端只有占位数据。
+        PacketDistributor.sendToServer(new SyncSkillComponentPacket(skills));
     }
 }

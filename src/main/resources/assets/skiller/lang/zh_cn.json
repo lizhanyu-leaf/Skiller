@@ -4,6 +4,10 @@
   "tooltip.skiller.detail": "详情：%s",
   "tooltip.skiller.detail_none": "暂无",
 
+  "config.skiller.range": "范围",
+  "config.skiller.whitelist": "白名单",
+  "config.skiller.pull_strength": "拉力",
+
   "key.categories.skiller": "技能系统",
   "key.skiller.skill_0": "技能槽位 1",
   "key.skiller.skill_1": "技能槽位 2",

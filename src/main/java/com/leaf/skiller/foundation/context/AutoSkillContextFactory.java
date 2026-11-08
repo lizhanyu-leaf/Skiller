@@ -4,9 +4,17 @@ import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
 import com.leaf.skiller.foundation.skill.config.SkillContextFactory;
 import com.leaf.skiller.util.ColorConfig;
+import com.mojang.datafixers.util.Pair;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.FloatTag;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.LongTag;
+import net.minecraft.nbt.NumericTag;
+import net.minecraft.nbt.Tag;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -33,7 +41,7 @@ public class AutoSkillContextFactory implements SkillContextFactory<AutoSkillCon
         }
 
         AutoSkillContext context = new AutoSkillContext(
-                env.getPlayer(), resolveColor(data, instance.level()), resolved);
+                env.getPlayer(), resolveColor(data, instance.level()), resolved, readParameters(resolved));
         // 创建完成后的回调：调用方可基于 env / instance / context 做最后调整
         if (config.customizer != null) {
             config.customizer.customize(env, instance, context);
@@ -50,7 +58,34 @@ public class AutoSkillContextFactory implements SkillContextFactory<AutoSkillCon
         ColorConfig color = config.colorEntry != null
                 ? config.colorEntry.get(level)
                 : DEFAULT_COLOR;
-        return new AutoSkillContext(env.getPlayer(), color, resolved);
+        return new AutoSkillContext(env.getPlayer(), color, resolved, readParameters(resolved));
+    }
+
+    // 从解析后的配置抽取参数键值对；按键名排序保证顺序稳定。
+    // 在 customizer 之前调用，因此 customizer 写入的瞬态键（如 target）不会混入。
+    private static List<Pair<String, Object>> readParameters(CompoundTag resolved) {
+        List<String> keys = new ArrayList<>(resolved.getAllKeys());
+        keys.sort(null);
+        List<Pair<String, Object>> parameters = new ArrayList<>(keys.size());
+        for (String key : keys) {
+            Tag tag = resolved.get(key);
+            if (tag == null) continue;
+            parameters.add(Pair.of(key, valueOf(tag)));
+        }
+        return parameters;
+    }
+
+    // 按 NBT 实际类型还原参数值：数值还原为 int/long/float/double，其余按字符串。
+    private static Object valueOf(Tag tag) {
+        if (tag instanceof NumericTag numeric) {
+            return switch (tag) {
+                case IntTag ignored -> numeric.getAsInt();
+                case LongTag ignored -> numeric.getAsLong();
+                case FloatTag ignored -> numeric.getAsFloat();
+                default -> numeric.getAsDouble();
+            };
+        }
+        return tag.getAsString();
     }
 
     // 单个 entry 的解析与写回：实例数据有 → 读；没有 → 等级默认

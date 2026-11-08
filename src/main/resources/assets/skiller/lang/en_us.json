@@ -4,6 +4,10 @@
   "tooltip.skiller.detail": "Details: %s",
   "tooltip.skiller.detail_none": "None",
 
+  "config.skiller.range": "Range",
+  "config.skiller.whitelist": "Whitelist",
+  "config.skiller.pull_strength": "Pull Strength",
+
   "key.categories.skiller": "Skiller",
   "key.skiller.skill_0": "Skill Slot 1",
   "key.skiller.skill_1": "Skill Slot 2",

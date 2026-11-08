@@ -3,9 +3,12 @@ package com.leaf.skiller.client.tooltip;
 import com.leaf.skiller.AllDataComponents;
 import com.leaf.skiller.AllKeys;
 import com.leaf.skiller.content.skill.SkillComponent;
+import com.leaf.skiller.foundation.context.SkillContext;
 import com.leaf.skiller.foundation.skill.ISkillInstance;
 import com.leaf.skiller.foundation.skill.SkillBundle;
+import com.leaf.skiller.foundation.skill.config.SkillContextEnvironment;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.datafixers.util.Pair;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -42,8 +45,8 @@ import java.util.Map;
  * <li>With Alt key: Displays detailed skill information including key bindings, names, levels, and types
  * - 按住Alt键：显示详细的技能信息，包括按键绑定、名称、等级和类型</li>
  * <li>With Alt key and Up/Down arrows: Moves a ">>" cursor between skill entries; the detail of
- *       the selected skill is shown below the whole list
- * - 按住Alt键并按上/下方向键：在技能条目之间移动">>"光标，所选技能的详情显示在整个列表下方</li>
+ *       the selected skill (with its parameters) is shown below the whole list
+ * - 按住Alt键并按上/下方向键：在技能条目之间移动">>"光标，所选技能的详情（含参数）显示在整个列表下方</li>
  * </ul>
  *
  * @see AllDataComponents#SKILL_COMPONENT
@@ -52,6 +55,24 @@ import java.util.Map;
  * @since 1.0.0
  */
 public class SkillTooltipHandler {
+
+    /**
+     * Color of informational lines: the Alt hint, the detail line and parameter lines.
+     * 信息行（Alt提示、详情行、参数行）的颜色。
+     */
+    private static final ChatFormatting INFO_COLOR = ChatFormatting.GRAY;
+
+    /**
+     * Color of the ">>" cursor marking the selected skill entry.
+     * ">>"光标（标记选中技能条目）的颜色。
+     */
+    private static final ChatFormatting CURSOR_COLOR = ChatFormatting.YELLOW;
+
+    /**
+     * Color of segments wrapped in {@code _xxx_} markers inside descriptions.
+     * 描述中被{@code _xxx_}标记包裹片段的颜色。
+     */
+    private static final ChatFormatting HIGHLIGHT_COLOR = ChatFormatting.WHITE;
 
     /**
      * Index of the skill entry the ">>" cursor currently points to.
@@ -112,6 +133,19 @@ public class SkillTooltipHandler {
      * @since 1.0.0
      */
     public static void addTooltip(ItemTooltipEvent event) {
+        // Track arrow-key edges EVERY frame — even when not hovering a skill item (the method
+        // early-returns below) — otherwise the stale previous-frame state swallows the first
+        // press made after hovering something else.
+        // 每帧都跟踪方向键边沿——即使没有悬停技能物品（下方会提前返回）——
+        // 否则过期的上一帧状态会吞掉悬停其他物品之后做出的第一次按键。
+        long window = Minecraft.getInstance().getWindow().getWindow();
+        boolean up = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_UP);
+        boolean down = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_DOWN);
+        boolean upPressed = up && !prevUp;
+        boolean downPressed = down && !prevDown;
+        prevUp = up;
+        prevDown = down;
+
         ItemStack stack = event.getItemStack();
         SkillComponent component = stack.get(AllDataComponents.SKILL_COMPONENT);
         if (component == null) return;
@@ -120,13 +154,11 @@ public class SkillTooltipHandler {
         // 未按住Alt键时显示简短提示（同时重置光标状态）。
         if (!Screen.hasAltDown()) {
             cursorIndex = 0;
-            prevUp = false;
-            prevDown = false;
             lastStack = null;
             event.getToolTip().add(
                     1,
                     Component.translatable("tooltip.skiller.skill_tips")
-                            .withStyle(ChatFormatting.GRAY)
+                            .withStyle(INFO_COLOR)
             );
             return;
         }
@@ -156,16 +188,10 @@ public class SkillTooltipHandler {
             lastStack = stack;
         }
 
-        // Move the cursor with Up/Down arrows. The tooltip event fires every frame, so the raw
-        // key states are edge-detected against the previous frame to step exactly one entry per press.
-        // 用上/下方向键移动光标。tooltip事件每帧触发，因此将原始按键状态与上一帧做边沿检测，每次按键只移动一格。
-        long window = Minecraft.getInstance().getWindow().getWindow();
-        boolean up = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_UP);
-        boolean down = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_DOWN);
-        if (up && !prevUp) cursorIndex--;
-        if (down && !prevDown) cursorIndex++;
-        prevUp = up;
-        prevDown = down;
+        // Move the cursor one entry per physical key press (edges computed above).
+        // 每次物理按键移动一格光标（边沿已在上方计算）。
+        if (upPressed) cursorIndex--;
+        if (downPressed) cursorIndex++;
 
         // Clamp the cursor into bounds (also covers an empty or shrunken skill list).
         // 将光标限制在有效范围内（同时处理空列表或列表缩短的情况）。
@@ -184,7 +210,7 @@ public class SkillTooltipHandler {
             event.getToolTip().add(index++,
                     fromSkill(
                             selected
-                                    ? Component.literal(">> ").withStyle(ChatFormatting.YELLOW)
+                                    ? Component.literal(">> ").withStyle(CURSOR_COLOR)
                                     : Component.literal("   "),
                             entry.key(),
                             entry.skill()
@@ -193,8 +219,11 @@ public class SkillTooltipHandler {
         // The detail always sits below the whole skill list, not below the selected entry.
         // 详情固定显示在整个技能列表下方，而不是所选条目下方。
         if (!entries.isEmpty()) {
-            event.getToolTip().add(index,
-                    fromDetail(entries.get(cursorIndex).skill()).withStyle(ChatFormatting.GRAY));
+            event.getToolTip().add(index++,
+                    fromDetail(entries.get(cursorIndex).skill()).withStyle(INFO_COLOR));
+            // Parameters are only shown while the detail is shown, right below it.
+            // 参数只在显示详情时、紧跟详情下方显示。
+            index = addParameters(event.getToolTip(), index, entries.get(cursorIndex).skill());
         }
     }
 
@@ -271,10 +300,10 @@ public class SkillTooltipHandler {
      * 如果该键没有翻译值，则回退显示{@code tooltip.skiller.detail_none}占位文本。
      * </p>
      * <p>
-     * In the description value, segments wrapped in underscores ({@code _xxx_}) are rendered
-     * bright (yellow) via {@link #fromMarkedText(String)}.
+     * In the description value, segments wrapped in underscores ({@code _xxx_}) are rendered in
+     * {@link #HIGHLIGHT_COLOR} via {@link #fromMarkedText(String)}.
      * 描述值中被下划线包裹的片段（{@code _xxx_}）会经{@link #fromMarkedText(String)}
-     * 以亮色（黄色）渲染。
+     * 以{@link #HIGHLIGHT_COLOR}颜色渲染。
      * </p>
      * <pre>
      *   Details: The skill's description - 详情：技能的描述内容
@@ -303,9 +332,9 @@ public class SkillTooltipHandler {
 
     /**
      * Converts marked text into a styled component: segments wrapped in underscores
-     * ({@code _xxx_}) are rendered bright (yellow), while the rest keeps the style
-     * inherited from its parent component.
-     * 将带标记的文本转换为带样式组件：被下划线包裹的片段（{@code _xxx_}）以亮色（黄色）渲染，
+     * ({@code _xxx_}) are rendered in {@link #HIGHLIGHT_COLOR}, while the rest keeps the
+     * style inherited from its parent component.
+     * 将带标记的文本转换为带样式组件：被下划线包裹的片段（{@code _xxx_}）以{@link #HIGHLIGHT_COLOR}渲染，
      * 其余部分继承父组件的样式。
      * <p>
      * Underscores must come in pairs around a segment. A single unmatched underscore
@@ -316,8 +345,8 @@ public class SkillTooltipHandler {
      * </p>
      *
      * @param text The raw (already translated) text possibly containing {@code _xxx_} markers - 原始（已翻译）文本，可能含{@code _xxx_}标记
-     * @return A component with the marked segments brightened - 标记片段已高亮的组件
-     * @see ChatFormatting#YELLOW
+     * @return A component with the marked segments highlighted - 标记片段已高亮的组件
+     * @see #HIGHLIGHT_COLOR
      * @since 1.0.0
      */
     public static MutableComponent fromMarkedText(String text) {
@@ -336,11 +365,75 @@ public class SkillTooltipHandler {
                 result.append(text.substring(start));
                 break;
             }
+            // 先追加标记之前的普通片段，否则非_xxx_文本会全部丢失。
             if (open > start) result.append(text.substring(start, open));
             result.append(Component.literal(text.substring(open + 1, close))
-                    .withStyle(ChatFormatting.WHITE));
+                    .withStyle(HIGHLIGHT_COLOR));
             start = close + 1;
         }
         return result;
+    }
+
+    /**
+     * Appends the skill's parameter lines below the detail line, e.g. "范围: 3".
+     * 在详情行下方追加技能的参数行，例如"范围: 3"。
+     * <p>
+     * A fresh context is built through the skill's context factory (with an
+     * event-less environment, the same way the client-side preview does it), and
+     * each {@code parameters()} entry renders as one line: the snake_case key is
+     * translated via {@code config.skiller.<key>} when a translation exists,
+     * otherwise the raw key is shown.
+     * 通过技能自己的上下文工厂构建一份新上下文（无事件环境，与客户端预览相同），
+     * {@code parameters()} 的每一项渲染为一行：蛇形键在存在翻译时经
+     * {@code config.skiller.<key>} 翻译，否则显示原始键名。
+     * </p>
+     *
+     * @param tooltip The tooltip list to append to / 要追加的tooltip列表
+     * @param index   The insert position / 插入位置
+     * @param skill   The selected skill instance / 被选中的技能实例
+     * @param <T>     The skill context type / 技能上下文类型
+     * @return The next free insert position / 下一个可插入位置
+     * @see SkillContext#parameters()
+     * @since 1.0.0
+     */
+    private static <T extends SkillContext> int addParameters(List<Component> tooltip, int index, ISkillInstance<T> skill) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return index;
+        SkillContext context = skill.skill().getFactory()
+                .create(SkillContextEnvironment.noEvent(mc.player, mc.level), skill);
+        if (context == null) return index;
+        for (Pair<String, Object> parameter : context.parameters()) {
+            tooltip.add(index++, parameterLine(parameter).withStyle(INFO_COLOR));
+        }
+        return index;
+    }
+
+    /**
+     * Renders one parameter as a "name: value" component; integral doubles are
+     * displayed without a trailing ".0" (3.0 → "3").
+     * 将单个参数渲染为"名称: 值"组件；整数值的 double 不带".0"显示（3.0 → "3"）。
+     *
+     * @param parameter The parameter key-value pair / 参数键值对
+     * @return The rendered line component / 渲染出的行组件
+     * @see #addParameters(List, int, ISkillInstance)
+     * @since 1.0.0
+     */
+    private static MutableComponent parameterLine(Pair<String, Object> parameter) {
+        String name = parameter.getFirst();
+        String translationKey = "config.skiller." + name;
+        Component nameComponent = Language.getInstance().has(translationKey)
+                ? Component.translatable(translationKey)
+                : Component.literal(name);
+        Object value = parameter.getSecond();
+        String valueText;
+        if (value instanceof Double d && !d.isInfinite() && !d.isNaN() && d == Math.floor(d)) {
+            valueText = String.valueOf(d.longValue());
+        } else {
+            valueText = String.valueOf(value);
+        }
+        return Component.literal("")
+                .append(nameComponent)
+                .append(": ")
+                .append(Component.literal(valueText));
     }
 }
